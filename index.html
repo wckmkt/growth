@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>그로스 대시보드 v2 — 퍼널 흐름안</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',sans-serif;background:#EEF2F7;color:#1e293b;font-size:13px;padding-bottom:60px}
+:root{--card:#fff;--border:#e2e8f0;--blue:#3b82f6;--green:#10b981;--red:#ef4444;--yellow:#f59e0b;
+  --t1:#0f172a;--t2:#475569;--t3:#94a3b8;--r:10px;--ret:#8b5cf6;--acq:#3b82f6}
+.hd{background:linear-gradient(135deg,#0B1D3A 0%,#162B52 60%,#1E3A6E 100%);padding:16px 28px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;position:sticky;top:0;z-index:100}
+.hd h1{color:#fff;font-size:17px;font-weight:800;letter-spacing:-.3px}
+.hd .sub{color:#93b4e8;font-size:11.5px;margin-top:3px}
+.hd-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hd-r select{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:7px;padding:7px 11px;font-size:12.5px;font-weight:700;font-family:inherit}
+.hd-r select option{color:#0f172a}
+.gen{color:#7f9fd4;font-size:11px}
+.secnav{flex-basis:100%;display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.secnav a{font-size:11px;font-weight:700;color:#c7dbf7;background:rgba(255,255,255,.10);
+  padding:4px 10px;border-radius:6px;text-decoration:none}
+.secnav a:hover{background:rgba(255,255,255,.22);color:#fff}
+.perio{display:flex;align-items:center;gap:6px}
+.perio .plbl{color:#93b4e8;font-size:11px;font-weight:800}
+.perio .ptil{color:#7f9fd4}
+.presets{background:rgba(255,255,255,.10)}
+.presets button{color:#c7dbf7;padding:4px 9px;font-size:11px}
+.presets button.on{background:rgba(255,255,255,.92);color:#0B1D3A}
+.b-soon{background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe}
+.cmt{display:flex;gap:9px;padding:9px 0;border-bottom:1px solid #f1f5f9;font-size:12.5px;line-height:1.65}
+.cmt:last-child{border-bottom:0}
+.cmt .dot{width:8px;height:8px;border-radius:2px;flex:0 0 8px;margin-top:5px}
+.cmt b{font-weight:800}
+.hm .c.chc:hover{outline:2px solid #94a3b8}
+.hm .c.chc.sel{outline:2px solid var(--blue);box-shadow:0 0 0 3px rgba(59,130,246,.18)}
+.act{margin-top:13px;border:1px solid var(--border);border-left:3px solid var(--blue);border-radius:8px;background:#f8fafc;padding:12px 15px}
+.act-hd{font-size:13px;font-weight:800;color:var(--t1);margin-bottom:8px}
+.act-body>div{font-size:12.5px;color:var(--t2);line-height:1.9}
+.act-k{display:inline-block;min-width:44px;font-weight:800;color:var(--t1);margin-right:6px}
+.wrap{max-width:1560px;margin:0 auto;padding:18px 22px}
+.sec{margin:26px 0 10px;scroll-margin-top:104px;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+.sec h2{font-size:15px;font-weight:800;color:var(--t1)}
+.sec .note{font-size:11.5px;color:var(--t3)}
+.badge{display:inline-block;font-size:10px;font-weight:800;padding:2.5px 7px;border-radius:5px;vertical-align:middle}
+.b-real{background:#d1fae5;color:#065f46;border:1px solid #6ee7b7}
+.b-need{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+.b-part{background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
+.card{background:var(--card);border-radius:var(--r);padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.04);min-width:0}
+.card h3{font-size:12.5px;font-weight:800;color:var(--t1);margin-bottom:3px}
+.card .h-sub{font-size:11px;color:var(--t3);margin-bottom:12px}
+.grid{display:grid;gap:13px}
+.g4{grid-template-columns:repeat(4,1fr)}.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:repeat(2,1fr)}.g21{grid-template-columns:2fr 1fr}
+@media(max-width:1200px){.g4{grid-template-columns:repeat(2,1fr)}.g3,.g2,.g21{grid-template-columns:1fr}}
+@media(max-width:640px){.g4{grid-template-columns:1fr}}
+
+/* 퍼널 스파인 */
+.spine{background:linear-gradient(135deg,#0B1D3A,#1E3A6E);border-radius:var(--r);padding:20px 22px;color:#fff;overflow-x:auto}
+.spine-row{display:flex;align-items:stretch;gap:0;min-width:900px}
+.stage{flex:1;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:9px;padding:13px 14px;min-width:0}
+.stage.gap{background:rgba(239,68,68,.13);border-color:rgba(252,165,165,.45)}
+.stage .st{font-size:10.5px;font-weight:800;color:#93b4e8;letter-spacing:.3px}
+.stage .sv{font-size:22px;font-weight:800;margin:6px 0 2px;letter-spacing:-.5px;line-height:1.1}
+.stage .sv small{font-size:12px;color:#93b4e8;font-weight:700;margin-left:2px}
+.stage .sd{font-size:10.5px;color:#a8c4ea;line-height:1.5}
+.arrow{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 9px;min-width:72px}
+.arrow .cv{font-size:12px;font-weight:800;color:#fff;background:rgba(255,255,255,.14);padding:3px 8px;border-radius:20px;white-space:nowrap}
+.arrow .cl{font-size:9.5px;color:#7f9fd4;margin-top:4px;white-space:nowrap}
+.arrow .ln{color:#4a6ea8;font-size:15px;line-height:1}
+
+/* KPI */
+.kpi{background:#fff;border-radius:var(--r);padding:15px 17px;box-shadow:0 1px 3px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.04);position:relative;overflow:hidden}
+.kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--blue)}
+.kpi.ret::after{background:var(--ret)}
+.kpi.warn::after{background:var(--yellow)}
+.kpi.gap::after{background:var(--red)}
+.kpi .k{font-size:11.5px;color:var(--t2);font-weight:700}
+.kpi .v{font-size:24px;font-weight:800;color:var(--t1);margin:7px 0 3px;letter-spacing:-.5px}
+.kpi .v small{font-size:12.5px;font-weight:700;color:var(--t3);margin-left:2px}
+.kpi .d{font-size:11px;color:var(--t3);line-height:1.5}
+.kpi.gap .v{color:#cbd5e1}
+.up{color:var(--green);font-weight:800}.dn{color:var(--red);font-weight:800}.flat{color:var(--t3);font-weight:700}
+
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:8px 9px;text-align:right;border-bottom:1px solid #f1f5f9;white-space:nowrap}
+th{font-size:11px;color:var(--t2);font-weight:800;background:#f8fafc;border-bottom:1.5px solid var(--border)}
+td:first-child,th:first-child{text-align:left;font-weight:700}
+tbody tr:hover{background:#f8fafc}
+tr.tot{background:#f1f5f9;font-weight:800}
+tr.tot td{border-top:1.5px solid var(--border)}
+.scroll{overflow-x:auto}
+.hm{font-size:11px;border-collapse:separate;border-spacing:2px}
+.hm th{background:transparent;border:0;font-size:10.5px;color:var(--t3);padding:3px 5px;text-align:center}
+.hm td{border:0;padding:0;text-align:center}
+.hm td.lab{text-align:left;font-weight:800;color:var(--t2);padding-right:8px;font-size:11px}
+.hm .c{border-radius:4px;padding:5px 3px;min-width:44px;font-weight:700;color:#0f172a}
+.hm .c.na{background:#f8fafc;color:#e2e8f0}
+.hm .c{line-height:1.25}
+.hm .c .sub2{display:block;font-size:9.5px;font-weight:600;color:#64748b;margin-top:1px}
+.hm td.bd,.hm th.bd{border-left:2px solid #cbd5e1}
+.mini{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-top:4px;background:#f1f5f9}
+.mini i{display:block;height:100%}
+.chsel{background:#f8fafc;border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-size:11.5px;font-weight:700;color:var(--t1);font-family:inherit}
+.toggle{display:inline-flex;background:#f1f5f9;border-radius:7px;padding:2px;gap:2px}
+.toggle button{border:0;background:transparent;padding:5px 12px;border-radius:5px;font-size:11.5px;font-weight:700;color:var(--t2);cursor:pointer;font-family:inherit}
+.toggle button.on{background:#fff;color:var(--blue);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+code{background:#f1f5f9;padding:1.5px 5px;border-radius:4px;font-size:11px;font-family:ui-monospace,Consolas,monospace;color:#be185d}
+pre{background:#0f172a;color:#e2e8f0;padding:12px 15px;border-radius:8px;font-size:11.5px;overflow-x:auto;font-family:ui-monospace,Consolas,monospace;line-height:1.65;margin:8px 0}
+.need{border:1.5px dashed #fca5a5;background:#fffbfb;border-radius:var(--r);padding:16px 18px}
+.need h3{font-size:12.5px;font-weight:800;color:#991b1b;margin-bottom:4px}
+.need .h-sub{font-size:11px;color:#b91c1c;margin-bottom:10px}
+.need ul{margin:8px 0 0 17px;font-size:12px;color:var(--t2);line-height:1.8}
+.loading{text-align:center;padding:70px 20px;color:var(--t3);font-size:13px}
+.err{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:14px 18px;border-radius:8px;margin:20px 0;font-size:12.5px;line-height:1.7}
+canvas{max-width:100%}
+</style>
+</head>
+<body>
+
+<div class="hd">
+  <div>
+    <h1>그로스 대시보드 <span style="font-size:11px;background:rgba(255,255,255,.18);padding:3px 8px;border-radius:5px;vertical-align:middle;margin-left:6px">v2 흐름안</span></h1>
+    <div class="sub">유입 → 가입 → 첫구매 → 재구매 → 고객가치 → 이탈</div>
+  </div>
+  <div class="hd-r">
+    <div class="perio">
+      <span class="plbl">기간</span>
+      <select id="mfrom"></select><span class="ptil">~</span><select id="mto"></select>
+    </div>
+    <div class="toggle presets" id="presets">
+      <button data-p="1">최근 1개월</button><button data-p="3">3개월</button>
+      <button data-p="6">6개월</button><button data-p="ytd">올해</button>
+      <button data-p="all" class="on">전체</button>
+    </div>
+    <span class="gen" id="gen"></span>
+  </div>
+  <nav class="secnav" id="secnav"></nav>
+</div>
+
+<div class="wrap">
+  <div id="loading" class="loading">데이터 불러오는 중…</div>
+  <div id="app" style="display:none">
+
+    <div class="sec"><h2>고객 여정 한 줄</h2><span class="note" id="spine-note"></span></div>
+    <div class="spine"><div class="spine-row" id="spine"></div></div>
+
+    <!-- 1) Customer Growth -->
+    <div class="sec"><h2>1 · Customer Growth</h2><span class="badge b-part">일부 실측</span>
+      <span class="note">고객을 상태로 나눠서 본다 — 신규 / 활성 / 휴면 / 이탈위험 / VIP</span></div>
+    <div class="grid g4" id="cust-kpis"></div>
+    <div class="card" style="margin-top:13px">
+      <h3>활성 고객 구성 추이</h3>
+      <div class="h-sub">월 구매자를 신규 / 기존으로 분해 (실측)</div>
+      <canvas id="c-cust" height="110"></canvas>
+    </div>
+
+    <div class="card" style="margin-top:13px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+        <div>
+          <h3 style="margin-bottom:3px">등급별 퍼널 <span class="badge b-real">실측</span></h3>
+          <div class="h-sub" style="margin:0">세션 → 조회 → 장바구니 → 구매 · GA4 트래픽에 등급 차원</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select class="chsel" id="tf-ch"></select>
+          <div class="toggle" id="tf-dev">
+            <button data-d="__all__" class="on">전체</button>
+            <button data-d="APP">APP</button><button data-d="MW">MW</button><button data-d="PC">PC</button>
+          </div>
+        </div>
+      </div>
+      <div class="scroll"><table id="t-tierfunnel"></table></div>
+      <div id="tf-foot" style="margin-top:11px;font-size:11.5px;color:var(--t2);line-height:1.7"></div>
+      <div style="margin-top:14px"><canvas id="c-tiercr" height="105"></canvas></div>
+    </div>
+
+    <div class="card" style="margin-top:13px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+        <div>
+          <h3 style="margin-bottom:3px">등급별 구간이탈 매트릭스 <span id="churn-badge"></span></h3>
+          <div class="h-sub" style="margin:0">등급 × 마지막 접점 경과구간 — 어느 등급이 어디서 빠지는지</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div class="toggle" id="churn-basis">
+            <button data-b="login" class="on">로그인 기준</button>
+            <button data-b="order">구매 기준</button>
+          </div>
+          <div class="toggle" id="churn-metric">
+            <button data-k="cnt" class="on">고객수</button>
+            <button data-k="cvr">구매전환율</button>
+            <button data-k="byr">구매자수</button>
+            <button data-k="rev">누적구매액</button>
+            <button data-k="ord">주문건수</button>
+            <button data-k="aov">주문단가</button>
+            <button data-k="arpu">객단가</button>
+          </div>
+          <div class="toggle" id="churn-mode">
+            <button data-m="abs" class="on">실수</button>
+            <button data-m="share">등급별 비중</button>
+          </div>
+        </div>
+      </div>
+      <div class="scroll"><table class="hm" id="t-churn"></table></div>
+      <div id="churn-foot" style="margin-top:11px;font-size:11.5px;color:var(--t2);line-height:1.7"></div>
+      <div id="churn-action"></div>
+    </div>
+
+    <div class="card" style="margin-top:13px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <div>
+          <h3 style="margin-bottom:3px">타겟 우선순위 <span id="prio-badge"></span></h3>
+          <div class="h-sub" style="margin:0">비용을 어디에 먼저 쓸지 — 상위 5개만</div>
+        </div>
+        <div class="toggle" id="prio-sort">
+          <button data-s="var" class="on">위험금액</button>
+          <button data-s="per">1인당 가치</button>
+          <button data-s="cnt">고객수</button>
+        </div>
+      </div>
+      <div id="prio-summary"></div>
+      <div class="scroll"><table id="t-prio"></table></div>
+      <div id="prio-rest"></div>
+    </div>
+
+    <div class="card" style="margin-top:13px">
+      <h3>이탈 커브 <span id="curve-badge"></span></h3>
+      <div class="h-sub">경과일별 구매율 — <b>급락 지점이 곧 구간 경계의 근거</b></div>
+      <div style="height:250px"><canvas id="c-curve"></canvas></div>
+      <div id="curve-foot" style="margin-top:11px;font-size:11.5px;color:var(--t2);line-height:1.7"></div>
+    </div>
+
+    <!-- 2) Channel Growth -->
+    <div class="sec"><h2>2 · Channel Growth</h2><span class="badge b-real">실측</span>
+      <span class="note">채널을 유입부터 재구매까지 한 줄로 — 획득 채널의 진짜 값어치</span></div>
+    <div class="card" style="margin-bottom:13px">
+      <h3>채널 진단 <span class="badge b-real">실측</span></h3>
+      <div class="h-sub">규모(신규 획득) × 질(12개월 LTV) — 어디에 더 쓰고 어디서 뺄지</div>
+      <div id="diag-cmt"></div>
+      <div class="scroll" style="margin-top:10px"><table id="t-diag"></table></div>
+    </div>
+
+    <div class="card">
+      <h3>채널별 전체 퍼널</h3>
+      <div class="h-sub">
+        앞 4개 열은 선택 월 실적 · 뒤 3개 열은 <b>그 채널로 첫구매한 고객의 코호트 성과</b>(2025-05 이후 누적)
+      </div>
+      <div class="scroll"><table id="t-chfunnel"></table></div>
+      <div style="margin-top:10px;font-size:11px;color:var(--t3);line-height:1.6">
+        ※ 앞부분(세션·가입·첫구매)은 라스트클릭 월별 집계, 뒷부분(재구매율·LTV)은 첫구매 채널 코호트입니다.
+        기간과 귀속 방식이 달라 두 영역을 곱해서 쓰지 마세요.<br>
+        ※ <b>가입→첫구매가 &gt;100%</b>인 채널은 오류가 아니라, 가입은 다른 채널에서 하고 첫구매만 이 채널로 들어온 경우입니다.
+        라스트클릭에서는 정상적으로 발생합니다.
+      </div>
+    </div>
+    <div class="card" style="margin-top:13px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <div>
+          <h3 style="margin-bottom:3px">채널별 월 추이 <span class="badge b-real">실측</span></h3>
+          <div class="h-sub" style="margin:0">어느 채널이 크고 어느 채널이 죽는지 — 누계로는 안 보이는 것</div>
+        </div>
+        <div class="toggle" id="tr-metric">
+          <button data-m="s" class="on">세션</button>
+          <button data-m="join">가입</button>
+          <button data-m="first">첫구매</button>
+          <button data-m="rev">총수주</button>
+        </div>
+      </div>
+      <div style="height:290px"><canvas id="c-chtrend"></canvas></div>
+      <div id="tr-foot" style="margin-top:11px;font-size:11.5px;color:var(--t2);line-height:1.7"></div>
+    </div>
+
+    <div class="grid g2" style="margin-top:13px">
+      <div class="card">
+        <h3>채널별 잔존 곡선</h3>
+        <div class="h-sub">첫구매 후 경과 개월별 재구매율 · 2025-05 이후 코호트 가중평균</div>
+        <canvas id="c-chret" height="170"></canvas>
+      </div>
+      <div class="card">
+        <h3>채널별 누적 LTV 곡선</h3>
+        <div class="h-sub">1인당 누적 매출 — 위로 빨리 올라갈수록 회수가 빠릅니다</div>
+        <canvas id="c-chltv" height="170"></canvas>
+      </div>
+    </div>
+
+    <!-- 3) Cohort & LTV -->
+    <div class="sec"><h2>3 · Cohort &amp; LTV</h2><span class="badge b-real">실측</span>
+      <span class="note">첫구매월 × 채널 · <b>상단 기간 설정과 무관하게 전체 구간</b> — 고객군 축(등급)은 데이터 도착 시 추가</span></div>
+    <div class="grid g4" id="coh-kpis"></div>
+    <div class="card" style="margin-top:13px">
+      <h3>채널별 잔존율 특이사항</h3>
+      <div class="h-sub">전체 평균과 비교해 눈에 띄는 채널만 자동 추출 (2025-05 이후 코호트)</div>
+      <div id="coh-comment"></div>
+    </div>
+
+    <div class="card" style="margin-top:13px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+        <div>
+          <h3 style="margin-bottom:3px">첫구매월 × 경과월</h3>
+          <div class="h-sub" style="margin:0">0개월차 = 코호트 사이즈(생애첫구매수)</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select class="chsel" id="ch-sel"></select>
+          <div class="toggle" id="hm-toggle">
+            <button data-m="ret" class="on">유지율</button>
+            <button data-m="ltv">누적 LTV</button>
+            <button data-m="cnt">구매자수</button>
+          </div>
+        </div>
+      </div>
+      <div class="scroll"><table class="hm" id="t-hm"></table></div>
+      <div id="hm-foot" style="margin-top:11px;font-size:11.5px;color:var(--t2);line-height:1.7"></div>
+    </div>
+    <!-- 4) Product & Category -->
+    <div class="sec"><h2>4 · Product &amp; Category Growth</h2><span class="badge b-need">데이터 필요</span>
+      <span class="note">어떤 브랜드/카테고리가 신규 고객을 만들고 있는지</span></div>
+    <div class="need">
+      <h3>현재 확보된 데이터에 상품 축이 전혀 없습니다</h3>
+      <div class="h-sub">기존 파이프라인(Tableau·GA4·BIZW)은 전부 일 × 채널 × 디바이스로 집계돼 상품 정보가 없습니다</div>
+      <pre>Q6. 브랜드/카테고리별 신규 획득 (월 × 카테고리 × 브랜드)
+ym, category, brand, buyers, new_buyers, orders, revenue, new_revenue
+
+   → new_buyers = 그 달 '생애첫구매'를 이 브랜드/카테고리에서 한 고객 수
+   → 이게 있어야 "어떤 상품이 신규를 데려오는가"를 답할 수 있음
+   → 회원 한정 / 매출은 원 단위 / 총수주 기준
+
+Q6b. 첫구매 상품 → 재구매 연결 (선택, 있으면 강력)
+first_category, next_category, customers
+   → 첫구매 카테고리별로 두 번째 구매가 어디로 가는지
+   → 진입 상품(entry product)과 확장 경로를 알 수 있음</pre>
+      <ul>
+        <li><b>브랜드 수가 많으면</b> 상위 30개 + 나머지 「기타」로 묶어주세요. 브라우저에서 다 못 그립니다</li>
+        <li><b>카테고리 레벨</b>은 대분류 1단계면 충분합니다 (의류/가방/슈즈/액세서리 등)</li>
+        <li>이 데이터가 오면 <b>신규 획득 기여 상품 랭킹</b>과 <b>진입 상품별 LTV</b>를 붙일 수 있습니다</li>
+      </ul>
+    </div>
+
+  </div>
+  <div id="fatal"></div>
+</div>
+
+<script>
+const DATA_URLS=['https://wckmkt.github.io/dashboard/KPI/pmkt_kpi_data.json','pmkt_kpi_data.json'];
+const CH_ORDER=['Organic','SA','DA','PCS','브랜드제휴','CRM','OwnedMedia','W크리에이터','Offline'];
+const CH_COLOR={Organic:'#3b82f6',SA:'#10b981',DA:'#f59e0b',PCS:'#8b5cf6','브랜드제휴':'#ec4899',CRM:'#ef4444',OwnedMedia:'#14b8a6','W크리에이터':'#a16207',Offline:'#64748b','미상':'#cbd5e1'};
+const CH_FROM='2025-05';   // 첫구매 채널 트래킹이 온전해지는 시점
+let D=null,C=null,MONTHS=[],cur=null,charts={},hmMode='ret';
+let PFROM=null,PTO=null;                       // 기간 [시작월, 종료월]
+const inRange=()=>MONTHS.filter(m=>m>=PFROM&&m<=PTO);
+const oneMonth=()=>PFROM===PTO;
+
+const nf=n=>(n==null||isNaN(n))?'—':Math.round(n).toLocaleString('ko-KR');
+const eok=n=>(n==null||isNaN(n))?'—':(n/1e8).toFixed(1);
+const pct=(n,d=1)=>(n==null||isNaN(n))?'—':(n*100).toFixed(d)+'%';
+const ymLY=ym=>`${+ym.slice(0,4)-1}-${ym.slice(5)}`;
+const ymDiff=(a,b)=>(+b.slice(0,4)*12 + +b.slice(5))-(+a.slice(0,4)*12 + +a.slice(5));
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function delta(c,b,isPct){
+  if(c==null||b==null||isNaN(c)||isNaN(b))return '<span class="flat">—</span>';
+  if(isPct){const d=(c-b)*100; if(Math.abs(d)<0.05)return '<span class="flat">보합</span>';
+    return `<span class="${d>0?'up':'dn'}">${d>0?'+':'▲'}${Math.abs(d).toFixed(1)}%p</span>`;}
+  if(!b)return '<span class="flat">—</span>';
+  const d=(c-b)/b*100; if(Math.abs(d)<0.05)return '<span class="flat">보합</span>';
+  return `<span class="${d>0?'up':'dn'}">${d>0?'+':'▲'}${Math.abs(d).toFixed(1)}%</span>`;
+}
+
+/* 매출 기준은 총수주로 통일 */
+function metrics(ym){
+  const r=D.REAL_MONTHLY[ym]; if(!r||!r.buyers) return null;
+  const s=(C.Q0_split||{})[ym]||null;
+  return {ym,buyers:r.buyers,newB:r.first,repB:r.buyers-r.first,join:r.join,
+    revenue:r.revenue,adcost:r.adcost,firstAd:r.first_ad,split:s,
+    repeatRate:(r.buyers-r.first)/r.buyers,
+    aov:r.revenue/r.buyers,
+    cac:(r.adcost&&r.first_ad)?r.adcost/r.first_ad:null,
+    target:(D.MONTHLY_TGTS[ym]||{}).revenue||null};
+}
+/* 기간 집계.
+   join·first·revenue·adcost는 합산 가능. buyers/재구매자는 월 유니크라 합산 불가 →
+   월평균으로 내고 라벨에 명시한다. 이걸 합치면 같은 사람을 여러 번 세게 된다. */
+function rangeMetrics(){
+  const ms=inRange().map(metrics).filter(Boolean);
+  if(!ms.length) return null;
+  const sum=k=>ms.reduce((a,x)=>a+(x[k]||0),0);
+  const avg=k=>sum(k)/ms.length;
+  const revenue=sum('revenue'), adcost=sum('adcost'), firstAd=sum('firstAd');
+  return {
+    n:ms.length, months:ms.map(x=>x.ym), single:ms.length===1,
+    join:sum('join'), newB:sum('newB'), revenue, adcost, firstAd,
+    buyers:avg('buyers'), repB:avg('repB'),          // 월평균
+    repeatRate:avg('repB')/avg('buyers'),
+    aov:avg('revenue')/avg('buyers'),   // 합계÷월평균 하면 개월수만큼 부풀어오른다
+    cac:(adcost&&firstAd)?adcost/firstAd:null,
+    sessions:inRange().reduce((a,ym)=>a+(monthSessions(ym)||0),0)||null,
+    split:(ms.length===1)?ms[0].split:null,
+    last:ms[ms.length-1]
+  };
+}
+function monthSessions(ym){
+  let s=0; for(const [d,row] of Object.entries(D.TRAFFIC)){ if(d.startsWith(ym)&&row.__total__&&row.__total__.s) s+=row.__total__.s; }
+  return s||null;
+}
+function channelAgg(){
+  const set=new Set(inRange());
+  const hit=d=>set.has(d.slice(0,7));
+  const out={};
+  const add=(ch,k,v)=>{if(v==null)return;(out[ch]=out[ch]||{join:0,first:0,rev:0,s:0,p:0})[k]+=v;};
+  for(const [d,row] of Object.entries(D.CONV_CH)){ if(!hit(d))continue;
+    for(const [ch,v] of Object.entries(row)){add(ch,'join',v.join);add(ch,'first',v.first);add(ch,'rev',v.rev);} }
+  for(const [d,row] of Object.entries(D.TRAFFIC)){ if(!hit(d))continue;
+    for(const [ch,v] of Object.entries(row)){add(ch,'s',v.s);add(ch,'p',v.p);} }
+  return out;
+}
+function cohortIndex(ch){
+  const src=(!ch||ch==='__all__')?C.Q1_cohort:C.Q1_cohort_ch.filter(r=>r.ch===ch);
+  const g={};
+  // 코호트는 상단 기간 설정과 무관하게 항상 전체 구간을 본다.
+  // 코호트 분석은 '언제 들어온 고객이 얼마나 남는가'라서 리포팅 기간과 축이 다르다.
+  for(const r of src){(g[r.cohort]=g[r.cohort]||{})[ymDiff(r.cohort,r.month)]=r;}
+  for(const c of Object.keys(g)) if(!g[c][0]) delete g[c];
+  return g;
+}
+/* 채널 코호트 요약 + 곡선 (경과 개월별 가중평균) */
+function chCurve(ch){
+  const ci=cohortIndex(ch);
+  // 채널별 비교는 트래킹이 온전한 2025-05 이후로 자르되, 전체는 전 구간을 쓴다
+  const from=(ch==='__all__')?'0000-00':CH_FROM;
+  const cohorts=Object.keys(ci).filter(c=>c>=from).sort();
+  if(!cohorts.length) return null;
+  const num=[],den=[],rev=[];
+  for(const c of cohorts){
+    const S=ci[c][0].buyers;
+    for(const k of Object.keys(ci[c]).map(Number)){
+      num[k]=(num[k]||0)+ci[c][k].buyers; den[k]=(den[k]||0)+S; rev[k]=(rev[k]||0)+ci[c][k].revenue;
+    }
+  }
+  const ret=[],ltv=[]; let cum=0;
+  for(let k=0;k<den.length;k++){
+    if(!den[k]){ret[k]=null;ltv[k]=null;continue;}
+    ret[k]=num[k]/den[k]; cum+=rev[k]/den[k]; ltv[k]=cum;
+  }
+  const size=cohorts.reduce((a,c)=>a+ci[c][0].buyers,0);
+  const totRev=cohorts.reduce((a,c)=>a+Object.keys(ci[c]).reduce((x,k)=>x+ci[c][k].revenue,0),0);
+  const totOrd=cohorts.reduce((a,c)=>a+Object.keys(ci[c]).reduce((x,k)=>x+ci[c][k].orders,0),0);
+  const l12=cohorts.filter(c=>ci[c][12]).map(c=>{let s=0;for(let k=0;k<=12;k++)if(ci[c][k])s+=ci[c][k].revenue;return s/ci[c][0].buyers;});
+  return {size,ret,ltv,cumPer:totRev/size,freq:totOrd/size,
+    ret1:ret[1]??null, plat:(()=>{const a=ret.filter((v,k)=>k>=6&&v!=null);return a.length?a.reduce((x,y)=>x+y,0)/a.length:null;})(),
+    ltv12:l12.length?l12.reduce((a,b)=>a+b,0)/l12.length:null};
+}
+
+const mk=(id,cfg)=>{if(charts[id])charts[id].destroy();charts[id]=new Chart(document.getElementById(id),cfg);};
+const GRID={grid:{color:'#f1f5f9'},ticks:{font:{size:10},color:'#94a3b8'}};
+const hmColor=t=>t==null?'#f8fafc':`rgba(99,102,241,${(0.10+t*0.78).toFixed(3)})`;
+
+/* ══ 렌더 ══ */
+function render(){
+  const R=rangeMetrics(); if(!R) return;
+  cur=R.last.ym;                       // 코호트/전년비교의 기준월 = 기간의 마지막 달
+  document.getElementById('spine-note').textContent =
+    (R.single?`${PFROM} 기준`:`${PFROM} ~ ${PTO} (${R.n}개월 누계)`) + ' · 단계 사이 숫자는 전환율';
+  renderSpine(R);
+  renderCustomer(R);
+  renderChannelDiag();
+  renderChannelFunnel();
+  renderChannelTrend();
+  renderChannelCurves();
+  renderTierFunnel();
+  renderChurnMatrix();
+  renderPriority();
+  renderChurnCurve();
+  renderCohort();
+  renderCohortComment();
+}
+
+/* ── 등급별 퍼널 (Q7: 월 x 채널 x 디바이스 x 등급) ─────────────── */
+const TIER_COLOR={'W SIGNATURE':'#0f172a','W VIP':'#6366f1','W BEST':'#38bdf8','W FRIEND':'#94a3b8','비회원':'#e2e8f0'};
+const MEMBER_TIERS=['W SIGNATURE','W VIP','W BEST','W FRIEND'];
+/* 2025-12 개편 때 비회원 세션·구매가 회원(주로 W FRIEND)으로 재귀속됐다.
+   그래서 비회원 축은 그 전후로 연속되지 않는다. 회원 등급끼리는 연속된다. */
+const TIER_BREAK='2025-12';
+let tfCh='__all__', tfDev='__all__';
+
+function tierRows(){
+  return (C.Q7_tier||[]).filter(r=>
+    r.ym>=PFROM && r.ym<=PTO &&
+    (tfCh==='__all__'||r.channel===tfCh) &&
+    (tfDev==='__all__'||r.device===tfDev));
+}
+
+function renderTierFunnel(){
+  const rows=tierRows();
+  const agg={};
+  for(const r of rows){
+    const a=agg[r.tier]||(agg[r.tier]={sessions:0,views:0,carts:0,purchases:0,amount:0});
+    a.sessions+=r.sessions; a.views+=r.views; a.carts+=r.carts;
+    a.purchases+=r.purchases; a.amount+=r.amount;
+  }
+  const order=(C.tiers_all||MEMBER_TIERS.concat('비회원')).filter(t=>agg[t]);
+  const totS=order.reduce((a,t)=>a+agg[t].sessions,0);
+  const body=order.map(t=>{const a=agg[t];
+    return `<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${TIER_COLOR[t]||'#cbd5e1'};margin-right:6px"></span>${esc(t)}</td>`+
+      `<td>${nf(a.sessions)}</td><td>${totS?pct(a.sessions/totS):'—'}</td>`+
+      `<td>${a.sessions?(a.views/a.sessions).toFixed(2):'—'}</td>`+
+      `<td>${a.views?pct(a.carts/a.views,2):'—'}</td>`+
+      `<td><b>${a.sessions?pct(a.purchases/a.sessions,2):'—'}</b></td>`+
+      `<td>${a.purchases?nf(a.amount/a.purchases):'—'}</td>`+
+      `<td>${eok(a.amount)}</td></tr>`;}).join('');
+  const T=order.reduce((x,t)=>({s:x.s+agg[t].sessions,v:x.v+agg[t].views,c:x.c+agg[t].carts,
+    p:x.p+agg[t].purchases,m:x.m+agg[t].amount}),{s:0,v:0,c:0,p:0,m:0});
+  document.getElementById('t-tierfunnel').innerHTML=
+    `<thead><tr><th>등급</th><th>세션</th><th>세션비중</th><th>세션당 조회</th>`+
+    `<th>조회→장바</th><th>세션→구매</th><th>객단가</th><th>매출(억)</th></tr></thead>`+
+    `<tbody>${body}<tr class="tot"><td>전체</td><td>${nf(T.s)}</td><td>100.0%</td>`+
+    `<td>${(T.v/T.s).toFixed(2)}</td><td>${pct(T.c/T.v,2)}</td><td>${pct(T.p/T.s,2)}</td>`+
+    `<td>${nf(T.m/T.p)}</td><td>${eok(T.m)}</td></tr></tbody>`;
+
+  const spansBreak=(PFROM<TIER_BREAK && PTO>=TIER_BREAK);
+  document.getElementById('tf-foot').innerHTML=
+    `※ 세션은 기존 대시보드 트래픽과 동일한 GA4 소스입니다. 매출은 GA4 기준이라 총수주보다 평균 2% 낮습니다.`+
+    (spansBreak
+      ? `<br>※ <b>${TIER_BREAK} 등급 개편 때 비회원의 세션·구매가 회원(주로 W FRIEND)으로 재귀속</b>됐습니다.
+         선택 기간이 그 시점을 걸쳐 있어 <b>비회원 행과 W FRIEND 행은 전후 비교가 되지 않습니다.</b>
+         회원 등급끼리는 연속됩니다.`
+      : `<br>※ 선택 기간이 ${TIER_BREAK} 개편 ${PTO<TIER_BREAK?'이전':'이후'} 한쪽에만 있어 전 등급이 동일 기준입니다.`);
+
+  // 월별 전환율 추이 — 회원 등급만 (비회원은 개편 후 구매가 0이라 선이 끊긴 것처럼 보인다)
+  const yms=[...new Set(rows.map(r=>r.ym))].sort();
+  const byT={}; MEMBER_TIERS.forEach(t=>byT[t]={});
+  for(const r of rows){ if(!byT[r.tier])continue;
+    const b=byT[r.tier][r.ym]||(byT[r.tier][r.ym]={s:0,p:0}); b.s+=r.sessions; b.p+=r.purchases; }
+  mk('c-tiercr',{type:'line',data:{labels:yms.map(y=>y.slice(2)),datasets:MEMBER_TIERS.map(t=>({
+      label:t,data:yms.map(y=>{const b=byT[t][y];return b&&b.s?b.p/b.s*100:null;}),
+      borderColor:TIER_COLOR[t],backgroundColor:TIER_COLOR[t],tension:.3,pointRadius:2,borderWidth:2,spanGaps:true}))},
+    options:{plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}},
+      title:{display:true,text:'등급별 세션→구매 전환율 추이 (회원)',font:{size:11},color:'#94a3b8'},
+      tooltip:{callbacks:{label:c=>` ${c.dataset.label} ${c.raw==null?'—':c.raw.toFixed(2)+'%'}`}}},
+      scales:{x:GRID,y:{...GRID,ticks:{...GRID.ticks,callback:v=>v.toFixed(0)+'%'},beginAtZero:true}}}});
+}
+
+/* ── 타겟 우선순위 ────────────────────────────────────────────────
+   고객수로 예산을 나누면 큰 덩어리(저가치 이탈층)로 쏠린다.
+   위험금액으로 줄을 세워야 실제 잃을 돈 기준으로 배분된다. */
+let prioSort='var';
+function renderPriority(){
+  const snap=churnSnapshot(), rows=snap.rows;
+  document.getElementById('prio-badge').innerHTML =
+    rows.length?'<span class="badge b-real">실측</span>':'<span class="badge b-soon">데이터 대기</span>';
+  if(!rows.length){
+    document.getElementById('prio-summary').innerHTML='';
+    document.getElementById('t-prio').innerHTML=
+      '<tbody><tr><td style="color:#94a3b8;font-weight:600;border:0;padding:16px 4px">매트릭스 데이터가 들어오면 자동으로 채워집니다.</td></tr></tbody>';
+    return;
+  }
+  const cells=rows.map(r=>({tier:r.tier,band:r.band,c:r.customers,
+    rev:r.rev_365d||0, per:r.customers?(r.rev_365d||0)/r.customers:0}));
+  const key={var:'rev',per:'per',cnt:'c'}[prioSort];
+  cells.sort((a,b)=>b[key]-a[key]);
+  const totR=cells.reduce((a,x)=>a+x.rev,0), totC=cells.reduce((a,x)=>a+x.c,0);
+
+  const TOPN=5;
+  let cum=0,cumc=0; const head=[],rest=[];
+  cells.forEach((x,i)=>{
+    cum+=x.rev; cumc+=x.c;
+    const tr=`<tr><td>${i+1}</td>`+
+      `<td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${TIER_COLOR[x.tier]||'#cbd5e1'};margin-right:6px"></span>${esc(x.tier)}</td>`+
+      `<td style="text-align:left">${esc(x.band)}</td><td>${nf(x.c)}</td><td>${nf(x.per)}</td>`+
+      `<td><b>${eok(x.rev)}억</b></td><td>${pct(cum/totR)}</td></tr>`;
+    (i<TOPN?head:rest).push(tr);
+  });
+  const TH=`<thead><tr><th>#</th><th>등급</th><th style="text-align:left">구간</th><th>고객수</th>`+
+           `<th>1인당 가치</th><th>위험금액</th><th>누적</th></tr></thead>`;
+  document.getElementById('t-prio').innerHTML=TH+`<tbody>${head.join('')}</tbody>`;
+  document.getElementById('prio-rest').innerHTML= rest.length
+    ? `<details style="margin-top:8px"><summary style="cursor:pointer;font-size:11.5px;color:var(--t3);font-weight:700">나머지 ${rest.length}개 셀 보기</summary>`+
+      `<div class="scroll" style="margin-top:8px"><table>${TH}<tbody>${rest.join('')}</tbody></table></div></details>` : '';
+
+  let a=0,k=0,kc=0;
+  for(const x of [...cells].sort((p,q)=>q.rev-p.rev)){ a+=x.rev; k++; kc+=x.c; if(a/totR>=0.8) break; }
+  document.getElementById('prio-summary').innerHTML=
+    `<div style="background:#f0f9ff;border-left:3px solid var(--blue);border-radius:6px;padding:9px 13px;margin-bottom:10px;font-size:12.5px;line-height:1.6">
+       상위 <b>${k}개 셀</b> = 위험금액 <b>${pct(a/totR)}</b> · 고객 <b>${pct(kc/totC)}</b>.
+       <span style="color:var(--t2)">고객수로 나누면 저가치 이탈층으로 쏠립니다.</span>
+     </div>`;
+}
+
+/* ── 이탈 커브 — 구간 경계를 데이터로 정하기 위한 근거 ── */
+function renderChurnCurve(){
+  const d=C.Q4_curve||[];
+  document.getElementById('curve-badge').innerHTML =
+    d.length?'<span class="badge b-real">실측</span>':'<span class="badge b-soon">데이터 대기</span>';
+  const foot=document.getElementById('curve-foot');
+  if(!d.length){
+    if(charts['c-curve']){charts['c-curve'].destroy();delete charts['c-curve'];}
+    foot.innerHTML='※ <code>sql/Q5_churn_matrix.sql</code>의 <b>[4] 구간 탐색</b>을 돌려 '+
+      '<code>raw/Q4_churn_curve.tsv</code>로 넣으면 켜집니다.'+
+      '<pre style="margin-top:8px">day_from  day_to  customers  buy_rate_365d  rev_per_cust  cum_pct</pre>';
+    return;
+  }
+  const rows=[...d].sort((a,b)=>a.day_from-b.day_from);
+  mk('c-curve',{data:{labels:rows.map(r=>'D'+r.day_from),datasets:[
+    {type:'line',label:'구매율(365일)',data:rows.map(r=>r.buy_rate_365d),
+     borderColor:'#ef4444',backgroundColor:'#ef4444',yAxisID:'y',tension:.25,pointRadius:1.5,borderWidth:2},
+    {type:'bar',label:'고객수',data:rows.map(r=>r.customers),
+     backgroundColor:'rgba(148,163,184,.35)',yAxisID:'y1'}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}},
+      tooltip:{callbacks:{title:c=>'경과 '+rows[c[0].dataIndex].day_from+'~'+rows[c[0].dataIndex].day_to+'일'}}},
+      scales:{x:GRID,y:{...GRID,position:'left',ticks:{...GRID.ticks,callback:v=>v+'%'}},
+              y1:{...GRID,position:'right',grid:{drawOnChartArea:false},ticks:{...GRID.ticks,callback:v=>(v/1e4).toFixed(0)+'만'}}}}});
+  // 일 단위는 하루치 표본이라 낙폭이 심하게 튄다. 7일 이동평균으로 눌러야 추세가 보인다.
+  const br={}; rows.forEach(r=>{br[r.day_from]=r.buy_rate_365d;});
+  const nOf={}; rows.forEach(r=>{nOf[r.day_from]=r.customers;});
+  const days=Object.keys(br).map(Number).sort((a,b)=>a-b);
+  const sm={};
+  for(const a of days){
+    const w=[]; for(let x=a-3;x<=a+3;x++) if(br[x]!=null) w.push(br[x]);
+    sm[a]=w.reduce((p,q)=>p+q,0)/w.length;
+  }
+  const drop=days.filter(a=>sm[a-1]!=null).map(a=>({at:a,d:sm[a-1]-sm[a],n:nOf[a]||0}));
+  const rank={}; [...drop].sort((x,y)=>y.d-x.d).forEach((x,i)=>rank[x.at]=i+1);
+  const at=b=>{const h=drop.find(x=>x.at===b);
+    return h?`<b>D${b}</b> ${h.d.toFixed(2)}%p <span style="color:var(--t3)">(${rank[b]}위/${drop.length})</span>`:`<b>D${b}</b> —`;};
+
+  // 현재 경계로 잘랐을 때 각 구간의 가중 구매율 — 경계를 정당화하는 진짜 근거
+  const SEG=[[0,6,'초단기'],[7,27,'단기'],[28,89,'중기'],[90,179,'장기'],[180,9999,'초장기']];
+  const seg=SEG.map(([lo,hi,nm])=>{
+    const rs=rows.filter(r=>r.day_from>=lo&&r.day_from<=hi);
+    const c=rs.reduce((a,r)=>a+r.customers,0);
+    const w=c?rs.reduce((a,r)=>a+r.customers*(r.buy_rate_365d||0),0)/c:0;
+    return {nm,c,w};
+  });
+
+  foot.innerHTML =
+    `※ <b>현재 경계의 낙폭</b> (7일 이동평균) — ${[7,28,90,180].map(at).join(' · ')}<br>`+
+    `※ <b>구간별 구매율</b> — `+
+    seg.map(x=>`${x.nm} <b>${x.w.toFixed(1)}%</b>(${nf(x.c)}명)`).join(' · ')+`<br>`+
+    `<span style="display:block;margin-top:7px;padding:9px 12px;background:#f0f9ff;border-left:3px solid var(--blue);border-radius:6px">`+
+    `<b>결론 — 이탈은 절벽이 아니라 완만한 경사입니다.</b> 1일 단위로 다시 뽑아 봐도 D4~D9 초반 급락 외에 `+
+    `뚜렷한 무릎이 없고, 나머지 낙폭은 전부 1%p 미만입니다. 즉 <b>경계는 데이터가 정해주지 않습니다.</b><br>`+
+    `그래서 현재 7/28/90/180은 바꿀 이유가 없습니다 — 구간별 구매율이 10%p 안팎씩 고르게 떨어지고 `+
+    `인원도 고르게 나뉘어 운영 언어(1주·4주·3개월·6개월)와도 맞습니다.</span>`;
+}
+
+/* ── 등급별 구간이탈 매트릭스 ──────────────────────────────────────
+   기대 데이터 C.Q5_churn (raw/Q5_churn_matrix.tsv):
+     ym  basis(login|order)  tier  band_no  band  customers
+     avg_days  buyers_ever  login_no_buy  rev_365d
+   기대 메타 C.Q5_meta (raw/Q5_meta.tsv):
+     ym  log_from  log_to  asof  log_days
+   아직 없으면 골격만 그린다. TSV가 들어오면 코드 수정 없이 켜진다. */
+const CHURN_TIERS=['W SIGNATURE','W VIP','W BEST','W FRIEND'];
+const CHURN_BANDS=[
+  {no:1,name:'초단기', range:'D0~6',    hint:'1주 이내'},
+  {no:2,name:'단기',   range:'D7~27',   hint:'1~4주'},
+  {no:3,name:'중기',   range:'D28~89',  hint:'1~3개월'},
+  {no:4,name:'장기',   range:'D90~179', hint:'3~6개월'},
+  {no:5,name:'초장기', range:'D180+',   hint:'6개월 초과'},
+  {no:6,name:'무접점', range:'—',       hint:'로그인/구매 이력 없음'}
+];
+/* 이미지2의 채널 계획 — 데이터가 아니라 운영 룰이라 정적으로 둔다.
+   등급별로 갈리지 않고 구간별로만 갈린다(현 계획 기준). */
+const CHURN_ACTION={
+  1:{crm:'앱푸시 · 친구톡',        perf:'광고비 · 트래픽'},
+  2:{crm:'앱푸시 · 알림톡 · LMS',  perf:'광고비 · 트래픽 · 쿠폰'},
+  3:{crm:'LMS',                    perf:'광고비 · 매출 · 쿠폰'},
+  4:{crm:'LMS',                    perf:'광고비 · 매출 · 쿠폰 · 고객'},
+  5:{crm:'미정',                   perf:'미정', todo:true},
+  6:{crm:'미정',                   perf:'미정', todo:true}
+};
+const CRM_METRICS='발송수 / 오픈수 / 오픈율 / 광고비';
+let churnBasis='login', churnMetric='cnt', churnMode='abs', churnSel=null;
+
+/* 매트릭스 지표.
+   add=true 는 더할 수 있는 값 — 등급별 비중(%)이 말이 되는 것만 그렇다.
+   구매전환율·주문단가·객단가는 이미 비율이라 비중을 또 내면 뜻이 없다.
+   365일 창 기준: buyers_ever(평생 1회라도)는 거의 100%라 전환율에 못 쓴다. */
+const CHURN_METRICS={
+  cnt :{t:'고객수',     add:true,  g:r=>r.customers,
+        f:v=>nf(v)},
+  cvr :{t:'구매전환율', add:false, g:r=>r.customers?(r.buyers_365d||0)/r.customers:null,
+        f:v=>v==null?'—':pct(v)},
+  byr :{t:'구매자수',   add:true,  g:r=>r.buyers_365d,
+        f:v=>v==null?'—':nf(v)},
+  rev :{t:'누적구매액', add:true,  g:r=>r.rev_365d,
+        f:v=>v?eok(v)+'억':'—'},
+  ord :{t:'주문건수',   add:true,  g:r=>r.orders_365d,
+        f:v=>v==null?'—':nf(v)},
+  aov :{t:'주문단가',   add:false, g:r=>r.orders_365d?(r.rev_365d||0)/r.orders_365d:null,
+        f:v=>v?(v/1e4).toFixed(1)+'만':'—'},
+  arpu:{t:'객단가',     add:false, g:r=>r.buyers_365d?(r.rev_365d||0)/r.buyers_365d:null,
+        f:v=>v?(v/1e4).toFixed(1)+'만':'—'}
+};
+// Q5 재추출(orders_365d / buyers_365d)이 와야 켜지는 지표
+const CHURN_NEEDS_NEW={cvr:1,byr:1,ord:1,aov:1,arpu:1};
+/* 활성(파랑) → 이탈(빨강)으로 가는 순서색. 미니 스택바와 헤더 칩에 함께 쓴다 */
+const BAND_COLOR={1:'#22c55e',2:'#84cc16',3:'#f59e0b',4:'#f97316',5:'#ef4444',6:'#94a3b8'};
+
+/* 스냅샷은 월별로 쌓인다. 기간 설정의 마지막 달(PTO) 이하 중 가장 최근 것을 쓴다.
+   login 기준은 소급이 불가해 최신 1개월만 있으므로, 그 달에 없으면 order로 자동 전환한다. */
+function churnSnapshot(){
+  const all=C.Q5_churn||[];
+  const pick=b=>{
+    const ys=[...new Set(all.filter(r=>r.basis===b&&r.ym<=PTO).map(r=>r.ym))].sort();
+    return ys.length?ys[ys.length-1]:null;
+  };
+  // 스냅샷이 선택 기간보다 뒤에만 있을 수 있다(기간 기본값은 마감월까지인데
+  // 매트릭스는 오늘 기준으로 뽑히므로). 그때는 가장 이른 스냅샷을 쓰고 알린다.
+  const later=b=>{
+    const ys=[...new Set(all.filter(r=>r.basis===b).map(r=>r.ym))].sort();
+    return ys.length?ys[0]:null;
+  };
+  let basis=churnBasis, ym=pick(basis), fellBack=false, ahead=false;
+  if(!ym){ ym=later(basis); ahead=!!ym; }
+  if(!ym){
+    const other=(basis==='login')?'order':'login';
+    const y2=pick(other)||later(other);
+    if(y2){ basis=other; ym=y2; fellBack=true; ahead=(y2>PTO); }
+  }
+  return {rows:ym?all.filter(r=>r.basis===basis&&r.ym===ym):[], ym, basis, fellBack, ahead};
+}
+
+function renderChurnMatrix(){
+  const snap=churnSnapshot();
+  const rows=snap.rows, has=rows.length>0;
+  const idx={}; rows.forEach(r=>{idx[r.tier+'|'+r.band_no]=r;});
+  const isOrder=snap.basis==='order';
+  document.getElementById('churn-badge').innerHTML =
+    has?'<span class="badge b-real">실측</span>':'<span class="badge b-soon">데이터 대기</span>';
+
+  // 새 컬럼이 아직 없으면 그 지표는 못 그린다 — 버튼을 잠그고 고객수로 되돌린다
+  const hasNew=rows.some(r=>r.buyers_365d!=null);
+  if(CHURN_NEEDS_NEW[churnMetric]&&!hasNew) churnMetric='cnt';
+  const M=CHURN_METRICS[churnMetric]||CHURN_METRICS.cnt;
+  const shareOn=(churnMode==='share')&&M.add;
+
+  const mt=document.getElementById('churn-metric');
+  [...mt.children].forEach(b=>{
+    const lock=!!CHURN_NEEDS_NEW[b.dataset.k]&&!hasNew;
+    b.disabled=lock; b.style.opacity=lock?'.35':'';
+    b.title=lock?'Q5 재추출 필요 — orders_365d / buyers_365d':'';
+    b.classList.toggle('on',b.dataset.k===churnMetric);
+  });
+  [...document.getElementById('churn-mode').children].forEach(b=>{
+    const lock=(b.dataset.m==='share')&&!M.add;
+    b.disabled=lock; b.style.opacity=lock?'.35':'';
+    b.title=lock?'비율 지표라 비중이 성립하지 않습니다':'';
+    b.classList.toggle('on',b.dataset.m===(shareOn?'share':'abs'));
+  });
+
+  const cSum=t=>CHURN_BANDS.reduce((a,b)=>a+((idx[t+'|'+b.no]||{}).customers||0),0);
+  const mSum=t=>CHURN_BANDS.reduce((a,b)=>{
+    const r=idx[t+'|'+b.no]; return a+(r?(M.g(r)||0):0);},0);
+  // 색은 행(등급) 안에서 정규화한다. 전체 max로 잡으면 규모가 큰 등급 하나가
+  // 스케일을 독점해 나머지 행이 전부 창백해진다.
+  const rowMax={};
+  for(const t of CHURN_TIERS){
+    const ms=mSum(t); let m=0;
+    for(const b of CHURN_BANDS){
+      const r=idx[t+'|'+b.no]; if(!r) continue;
+      const raw=M.g(r);
+      const v=shareOn?(ms?raw/ms:0):raw;
+      if(v!=null&&v>m) m=v;
+    }
+    rowMax[t]=m;
+  }
+
+  let h='<thead><tr><th style="text-align:left">등급 \ '+(isOrder?'마지막 구매':'마지막 로그인')+'</th>';
+  for(const b of CHURN_BANDS)
+    h+=`<th class="${b.no===3?'bd':''}">`+
+       `<span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:${BAND_COLOR[b.no]};margin-right:4px"></span>`+
+       `${b.name}<br><span style="font-weight:600;color:#cbd5e1">${b.range}</span></th>`;
+  h+='<th>합계 · 구성</th></tr></thead><tbody>';
+
+  for(const t of CHURN_TIERS){
+    const sum=cSum(t), ms=mSum(t);
+    h+=`<tr><td class="lab">${t}</td>`;
+    for(const b of CHURN_BANDS){
+      const r=idx[t+'|'+b.no];
+      const edge=(b.no===3)?' bd':'';        // 활성(초단기·단기) / 이탈위험(중기~) 경계
+      if(!r){ h+=`<td class="${edge.trim()}"><div class="c na">·</div></td>`; continue; }
+      const raw=M.g(r);
+      const v=shareOn?(ms?raw/ms:0):raw;
+      const txt=shareOn?pct(v):M.f(raw);
+      const sub=shareOn?M.f(raw)
+               :(sum?pct((r.customers||0)/sum,0)+(churnMetric==='cnt'?'':' 고객'):'');
+      const m=rowMax[t]||0;
+      const on=churnSel&&churnSel.tier===t&&churnSel.band_no===b.no;
+      h+=`<td class="${edge.trim()}"><div class="c chc${on?' sel':''}" data-t="${esc(t)}" data-b="${b.no}"`+
+         ` style="background:${hmColor(m?Math.min(v/m,1):null)};cursor:pointer">${txt}`+
+         `<span class="sub2">${sub}</span></div></td>`;
+    }
+    const seg=CHURN_BANDS.map(b=>{
+      const r=idx[t+'|'+b.no]; const w=(sum&&r)?r.customers/sum*100:0;
+      return w?`<i style="width:${w.toFixed(2)}%;background:${BAND_COLOR[b.no]}"></i>`:'';
+    }).join('');
+    h+=`<td class="lab" style="text-align:right;color:#0f172a">${sum?nf(sum):'—'}`+
+       `<div class="mini">${seg}</div></td></tr>`;
+  }
+  document.getElementById('t-churn').innerHTML=h+'</tbody>';
+
+  renderChurnFoot(rows,has,isOrder,snap);
+  renderChurnAction(idx);
+}
+
+function renderChurnFoot(rows,has,isOrder,snap){
+  const el=document.getElementById('churn-foot');
+  if(!has){
+    el.innerHTML =
+      '※ 아직 데이터가 없어 <b>골격만</b> 표시됩니다. 아래 형태로 <code>raw/Q5_churn_matrix.tsv</code>가 들어오면 자동으로 채워집니다.'+
+      '<pre style="margin-top:8px">ym  basis  tier  band_no  band  customers  avg_days  buyers_ever  login_no_buy  rev_365d  avg_login_cnt  orders_365d  buyers_365d\n'+
+      'basis = login | order   (두 기준을 한 파일에 담으면 상단 토글이 그대로 동작)\n'+
+      'band_no = 1 초단기(D0~6) / 2 단기(D7~27) / 3 중기(D28~89)\n'+
+      '          4 장기(D90~179) / 5 초장기(D180+) / 6 무접점\n\n'+
+      'raw/Q5_meta.tsv :  ym  log_from  log_to  asof  log_days</pre>';
+    return;
+  }
+  const meta=(C.Q5_meta||[]).filter(m=>m.ym===snap.ym)[0]||(C.Q5_meta||[])[0];
+  const lnb=rows.reduce((a,r)=>a+(r.login_no_buy||0),0);
+  const tot=rows.reduce((a,r)=>a+(r.customers||0),0);
+  let t=`※ <b>${esc(snap.ym)}</b> 스냅샷 · ${isOrder?'마지막 구매':'마지막 로그인'} 기준.`+
+        (snap.ahead?` <b style="color:#b45309">(선택 기간 ${esc(PTO)} 이후 시점 — 매트릭스는 뽑은 날 기준 현재 상태입니다)</b>`:'')+`<br>`;
+  if(snap.fellBack) t+=`※ 선택 기간에 <b>${churnBasis==='login'?'로그인':'구매'} 기준 스냅샷이 없어</b>
+     ${isOrder?'구매':'로그인'} 기준으로 대신 표시했습니다.
+     로그인 기준은 과거 복원이 불가해 최신 달만 존재합니다.<br>`;
+  if(meta && !isOrder) t+=`※ 로그인 이력 <b>${esc(meta.log_from)} ~ ${esc(meta.log_to)}</b>`+
+              (meta.log_days?` (${nf(meta.log_days)}일)`:'')+
+              `  전 구간 기준. <b>「무접점」은 로그인 이력이 아예 없는 회원</b>입니다.<br>`;
+  t+=`※ 전체 ${nf(tot)}명 기준. 구성비는 <b>행(등급) 내</b> 분포입니다.`;
+  if(lnb) t+=`<br>※ <b>로그인은 최근인데 구매는 없는 고객 ${nf(lnb)}명</b> — 두 축을 같이 봐야 나오는 군이고 CRM 1순위 타겟입니다.`;
+  el.innerHTML=t;
+}
+
+function renderChurnAction(idx){
+  const box=document.getElementById('churn-action');
+  if(!churnSel){ box.innerHTML=''; return; }
+  const a=CHURN_ACTION[churnSel.band_no]||{};
+  const b=CHURN_BANDS.find(x=>x.no===churnSel.band_no)||{};
+  const r=idx[churnSel.tier+'|'+churnSel.band_no];
+  box.innerHTML=
+    `<div class="act">
+       <div class="act-hd">
+         <b>${esc(churnSel.tier)}</b> · ${esc(b.name)} <span style="color:var(--t3)">(${esc(b.range)} · ${esc(b.hint)})</span>
+         ${a.todo?'<span class="badge b-soon" style="margin-left:6px">액션 미정</span>':''}
+       </div>
+       <div class="act-body">
+         <div><span class="act-k">대상</span> ${r?nf(r.customers)+'명':'— (데이터 대기)'}
+           ${r&&r.rev_365d?` · 위험금액 <b>${eok(r.rev_365d)}억</b>`:''}
+           ${r&&r.login_no_buy?` · 로그인·미구매 ${nf(r.login_no_buy)}명`:''}</div>
+         <div><span class="act-k">CRM</span> ${esc(a.crm||'—')}
+           ${a.todo?'':`<span style="color:var(--t3)"> — ${CRM_METRICS}</span>`}</div>
+         <div><span class="act-k">PERF</span> ${esc(a.perf||'—')}</div>
+       </div>
+     </div>`;
+}
+
+function renderSpine(m){
+  const sess=m.sessions;
+  const all=chCurve('__all__');
+  const perMo=m.single?'':' (월평균)';
+  const st=[
+    {t:'유입',v:sess?nf(sess):'—',u:'세션',d:m.single?'전 채널 합계':`${m.n}개월 합계`},
+    {t:'가입',v:nf(m.join),u:'명',d:m.single?'신규 회원가입':`${m.n}개월 합계`},
+    {t:'첫구매',v:nf(m.newB),u:'명',d:m.single?'생애첫구매':`${m.n}개월 합계`},
+    {t:'재구매',v:nf(m.repB),u:'명',d:`전체 구매자의 ${pct(m.repeatRate)}${perMo}`},
+    {t:'고객가치',v:all&&all.ltv12?nf(all.ltv12):'—',u:'원',d:'12개월 누적 LTV'},
+    {t:'이탈',v:'?',u:'',d:'Q4 데이터 필요',gap:true}
+  ];
+  const cv=[
+    sess&&m.join?{r:pct(m.join/sess,2),l:'세션→가입'}:null,
+    m.join?{r:pct(m.newB/m.join),l:'가입→첫구매'}:null,
+    all&&all.ret1!=null?{r:pct(all.ret1),l:'1개월차 재구매'}:null,
+    all&&all.ltv12?{r:'×'+(all.ltv12/(m.split?m.split.aov_new:m.aov)).toFixed(1),l:'첫구매 대비'}:null,
+    {r:'—',l:'이탈률'}
+  ];
+  let h='';
+  st.forEach((s,i)=>{
+    h+=`<div class="stage${s.gap?' gap':''}"><div class="st">${s.t}</div>`+
+       `<div class="sv">${s.v}${s.u?`<small>${s.u}</small>`:''}</div><div class="sd">${s.d}</div></div>`;
+    if(i<st.length-1&&cv[i]) h+=`<div class="arrow"><div class="ln">→</div><div class="cv">${cv[i].r}</div><div class="cl">${cv[i].l}</div></div>`;
+  });
+  document.getElementById('spine').innerHTML=h;
+}
+
+function renderCustomer(m){
+  const ly=m.single?metrics(ymLY(cur)):null;   // 전년 비교는 단일월일 때만 의미가 있다
+  const perMo=m.single?'':' (월평균)';
+  const all=chCurve('__all__');
+  const cards=[
+    {c:'',k:'신규 고객',v:nf(m.newB),u:'명',d:m.single?`생애첫구매 · 전년 ${delta(m.newB,ly&&ly.newB)}`:`생애첫구매 · ${m.n}개월 합계`},
+    {c:'ret',k:`활성 고객${perMo}`,v:nf(m.buyers),u:'명',d:m.single?`당월 구매자(유니크) · 전년 ${delta(m.buyers,ly&&ly.buyers)}`:'월 유니크라 합산 불가 — 월평균'},
+    {c:'ret',k:`재구매 고객${perMo}`,v:nf(m.repB),u:'명',d:`활성 중 ${pct(m.repeatRate)}`+(m.single?` · 전년 ${delta(m.repeatRate,ly&&ly.repeatRate,true)}`:'')},
+    {c:'ret',k:`객단가 (ARPU)${perMo}`,v:nf(m.aov),u:'원',d:'총수주 ÷ 구매자'}
+  ];
+  document.getElementById('cust-kpis').innerHTML=cards.map(x=>
+    `<div class="kpi ${x.c}"><div class="k">${x.k}</div><div class="v">${x.v}${(x.u&&x.v!=='—')?`<small>${x.u}</small>`:''}</div><div class="d">${x.d}</div></div>`).join('');
+
+  const ms=MONTHS.map(metrics).filter(Boolean);
+  mk('c-cust',{type:'bar',data:{labels:ms.map(x=>x.ym.slice(2)),datasets:[
+    {label:'신규',data:ms.map(x=>x.newB),backgroundColor:'#3b82f6'},
+    {label:'기존(재구매)',data:ms.map(x=>x.repB),backgroundColor:'#8b5cf6'}]},
+    options:{plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}},
+      tooltip:{callbacks:{label:c=>` ${c.dataset.label} ${nf(c.raw)}명`}}},
+      scales:{x:{stacked:true,...GRID},y:{stacked:true,...GRID,ticks:{...GRID.ticks,callback:v=>(v/1e4)+'만'}}}}});
+
+  // (등급별 구간이탈 매트릭스로 대체되어 힌트 엘리먼트는 없음)
+}
+
+/* 가입→첫구매는 라스트클릭이라 가입 채널과 첫구매 채널이 다를 수 있다.
+   그래서 채널 단위로는 100%를 넘길 수 있고, 그건 오류가 아니라 정의의 한계다.
+   숫자를 그대로 노출하되 전환율처럼 읽히지 않게 표기한다. */
+function j2f(v){
+  if(!v.join) return '<span style="color:#cbd5e1">—</span>';
+  const r=v.first/v.join;
+  return r>1 ? `<span style="color:#b45309" title="첫구매가 가입보다 많음 — 가입은 다른 채널에서 발생">&gt;100%</span>`
+             : pct(r);
+}
+
+/* 채널 진단 — 규모 x 질로 사분면을 매기고 병목을 문장으로 뽑는다.
+   표가 아니라 판단을 내놓는 게 목적이다. */
+const QUAD={
+  keep:{t:'유지·확대',   c:'#065f46', bg:'#d1fae5'},
+  qual:{t:'질 개선',     c:'#92400e', bg:'#fef3c7'},
+  grow:{t:'확대 여지',   c:'#1e40af', bg:'#dbeafe'},
+  cut :{t:'축소 검토',   c:'#991b1b', bg:'#fee2e2'}
+};
+function renderChannelDiag(){
+  const agg=channelAgg(), tot=agg.__total__||{};
+  const rows=CH_ORDER.map(ch=>{
+    const a=agg[ch]; if(!a||!a.first) return null;
+    const cc=chCurve(ch);
+    return {ch, s:a.s||0, join:a.join||0, first:a.first||0, rev:a.rev||0,
+            s2j:a.s?a.join/a.s:null, j2f:a.join?a.first/a.join:null,
+            ltv:(cc&&cc.size>=1000)?cc.ltv12:null};
+  }).filter(x=>x&&x.first>=100);
+  if(!rows.length){document.getElementById('t-diag').innerHTML='';return;}
+
+  // 사분면 기준 = 중앙값. 절대 기준을 박으면 규모가 바뀔 때마다 손봐야 한다.
+  const med=a=>{const v=a.filter(x=>x!=null).sort((x,y)=>x-y);
+    return v.length?v[Math.floor(v.length/2)]:0;};
+  const mF=med(rows.map(x=>x.first)), mL=med(rows.map(x=>x.ltv));
+  rows.forEach(x=>{
+    const big=x.first>=mF, good=(x.ltv!=null)&&x.ltv>=mL;
+    x.q = big&&good?'keep' : big&&!good?'qual' : !big&&good?'grow' : 'cut';
+  });
+  rows.sort((a,b)=>b.rev-a.rev);
+
+  const tS2J=tot.s?tot.join/tot.s:null, tJ2F=tot.join?tot.first/tot.join:null;
+  const rel=(v,t)=>(v==null||!t)?'':` <span style="color:${v<t*0.6?'#b45309':(v>t*1.6?'#065f46':'#94a3b8')}">${(v/t).toFixed(1)}x</span>`;
+  document.getElementById('t-diag').innerHTML=
+    `<thead><tr><th>채널</th><th>세션</th><th>신규</th><th>세션→가입</th><th>가입→첫구매</th>`+
+    `<th>12M LTV</th><th>총수주(억)</th><th>판정</th></tr></thead><tbody>`+
+    rows.map(x=>`<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${CH_COLOR[x.ch]||'#cbd5e1'};margin-right:6px"></span>${esc(x.ch)}</td>`+
+      `<td>${nf(x.s)}</td><td>${nf(x.first)}</td>`+
+      `<td>${x.s2j==null?'—':pct(x.s2j,2)}${rel(x.s2j,tS2J)}</td>`+
+      `<td>${x.j2f==null?'—':(x.j2f>1?'&gt;100%':pct(x.j2f))}${x.j2f<=1?rel(x.j2f,tJ2F):''}</td>`+
+      `<td>${x.ltv?nf(x.ltv):'—'}</td><td>${eok(x.rev)}</td>`+
+      `<td><span style="font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:5px;background:${QUAD[x.q].bg};color:${QUAD[x.q].c}">${QUAD[x.q].t}</span></td></tr>`).join('')+
+    `<tr class="tot"><td>전체</td><td>${nf(tot.s)}</td><td>${nf(tot.first)}</td>`+
+    `<td>${tS2J?pct(tS2J,2):'—'}</td><td>${tJ2F?pct(tJ2F):'—'}</td><td>—</td><td>${eok(tot.rev)}</td><td></td></tr></tbody>`;
+
+  // 자동 진단 문장 — 숫자는 전부 위 표에서 그대로 가져온다
+  const line=(ch,t)=>`<div class="cmt"><div class="dot" style="background:${CH_COLOR[ch]||'#94a3b8'}"></div><div>${t}</div></div>`;
+  const out=[];
+  const qual=rows.filter(x=>x.q==='qual').sort((a,b)=>b.first-a.first)[0];
+  if(qual) out.push(line(qual.ch,
+    `<b>${esc(qual.ch)}</b>는 신규 <b>${nf(qual.first)}명</b>으로 규모가 큰데 12개월 LTV가 <b>${nf(qual.ltv)}원</b>으로 중앙값(${nf(mL)}원) 아래입니다. <b>양은 나오는데 질이 안 따라오는 채널</b>입니다.`));
+  const grow=rows.filter(x=>x.q==='grow').sort((a,b)=>(b.ltv||0)-(a.ltv||0))[0];
+  if(grow) out.push(line(grow.ch,
+    `<b>${esc(grow.ch)}</b>는 LTV <b>${nf(grow.ltv)}원</b>으로 최상위인데 신규는 <b>${nf(grow.first)}명</b>뿐입니다. <b>늘릴 여지가 가장 큰 채널</b>입니다.`));
+  const leak=rows.filter(x=>x.s2j!=null&&tS2J&&x.s2j<tS2J*0.5&&x.s>=100000&&x.first>=mF).sort((a,b)=>b.s-a.s)[0];
+  if(leak) out.push(line(leak.ch,
+    `<b>${esc(leak.ch)}</b>는 세션 <b>${nf(leak.s)}</b>인데 세션→가입이 <b>${pct(leak.s2j,2)}</b>로 전체(${pct(tS2J,2)})의 ${(leak.s2j/tS2J).toFixed(1)}배입니다. <b>유입은 사는데 가입에서 샙니다.</b>`));
+  const jleak=rows.filter(x=>x.j2f!=null&&x.j2f<=1&&tJ2F&&x.j2f<tJ2F*0.5&&x.join>=1000).sort((a,b)=>b.join-a.join)[0];
+  if(jleak) out.push(line(jleak.ch,
+    `<b>${esc(jleak.ch)}</b>는 가입 ${nf(jleak.join)}명 중 첫구매가 <b>${pct(jleak.j2f)}</b>뿐입니다(전체 ${pct(tJ2F)}). <b>가입은 시키는데 구매로 못 넘깁니다.</b>`));
+  out.push(`<div class="cmt"><div class="dot" style="background:#cbd5e1"></div><div style="color:#64748b">사분면 기준은 중앙값(신규 ${nf(mF)}명 · LTV ${nf(mL)}원). LTV는 2025-05 이후 첫구매 코호트 기준이라 선택 기간과 무관합니다.</div></div>`);
+  document.getElementById('diag-cmt').innerHTML=out.join('');
+}
+
+function renderChannelFunnel(){
+  const agg=channelAgg();
+  const tot=agg.__total__||{};
+  const rows=CH_ORDER.filter(c=>agg[c]).map(ch=>{
+    const v=agg[ch], cc=chCurve(ch);
+    const small = !cc || cc.size<100;
+    return `<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${CH_COLOR[ch]||'#cbd5e1'};margin-right:6px"></span>${esc(ch)}</td>`+
+      `<td>${v.s?nf(v.s):'—'}</td><td>${nf(v.join)}</td><td>${nf(v.first)}</td><td>${eok(v.rev)}</td>`+
+      `<td>${v.s&&v.join?pct(v.join/v.s,2):'—'}</td><td>${j2f(v)}</td>`+
+      `<td>${small?'—':pct(cc.ret1)}</td><td>${small?'—':(cc.ltv12?nf(cc.ltv12):'—')}</td>`+
+      `<td>${small?'—':nf(cc.cumPer)}</td></tr>`;
+  }).join('');
+  document.getElementById('t-chfunnel').innerHTML=
+    `<thead><tr><th>채널</th><th>세션</th><th>가입</th><th>첫구매</th><th>총수주(억)</th>`+
+    `<th>세션→가입</th><th>가입→첫구매</th><th>1M 재구매율</th><th>12M LTV</th><th>1인당 누적</th></tr></thead>`+
+    `<tbody>${rows}<tr class="tot"><td>전체</td><td>${tot.s?nf(tot.s):'—'}</td><td>${nf(tot.join)}</td>`+
+    `<td>${nf(tot.first)}</td><td>${eok(tot.rev)}</td><td>${tot.s&&tot.join?pct(tot.join/tot.s,2):'—'}</td>`+
+    `<td>${j2f(tot)}</td><td colspan="3"></td></tr></tbody>`;
+}
+
+/* 채널 x 월 유입 추이. TRAFFIC(세션)과 CONV_CH(가입·첫구매·매출)를 월로 말아 쓴다. */
+let trMetric='s';
+function renderChannelTrend(){
+  const yms=inRange();
+  const get=(ym,ch,k)=>{
+    let v=0;
+    const src=(k==='s')?D.TRAFFIC:D.CONV_CH;
+    for(const [d,row] of Object.entries(src)){
+      if(!d.startsWith(ym)) continue;
+      const c=row[ch]; if(!c) continue;
+      const x=(k==='s')?c.s:(k==='rev'?c.rev:c[k]);
+      if(x) v+=x;
+    }
+    return v;
+  };
+  const chs=CH_ORDER.filter(c=>yms.some(y=>get(y,c,trMetric)>0));
+  const scale=(trMetric==='rev')?1e8:1;
+  const ds=chs.map(ch=>({label:ch,
+    data:yms.map(y=>get(y,ch,trMetric)/scale),
+    borderColor:CH_COLOR[ch]||'#94a3b8',backgroundColor:CH_COLOR[ch]||'#94a3b8',
+    tension:.3,pointRadius:2,borderWidth:2,fill:false}));
+  const unit={s:'세션',join:'명',first:'명',rev:'억'}[trMetric];
+  mk('c-chtrend',{type:'line',data:{labels:yms.map(y=>y.slice(2)),datasets:ds},
+    options:{maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}},
+        tooltip:{callbacks:{label:c=>` ${c.dataset.label} ${nf(c.raw)}${unit}`}}},
+      scales:{x:GRID,y:{...GRID,ticks:{...GRID.ticks,
+        callback:v=>(trMetric==='rev')?v+'억':(v>=1e4?(v/1e4).toFixed(0)+'만':nf(v))}}}}});
+
+  // 첫달 대비 마지막달 증감이 큰 채널을 짚어준다
+  // 주요 채널만 본다. Offline(997세션)처럼 작은 채널은 +710% 같은 값이 나와
+  // 순위를 독점하지만 의미가 없다. 마지막 달 기준 1% 미만은 제외한다.
+  const lastY=yms[yms.length-1];
+  const totLast=chs.reduce((a,c)=>a+get(lastY,c,trMetric),0);
+  const major=chs.filter(c=>get(lastY,c,trMetric)>=totLast*0.01);
+  // 기준월은 '주요 채널이 모두 값을 가진 첫 달'. CONV_CH는 2025-01에 Organic만 있어
+  // 그냥 첫 달로 잡으면 나머지가 0에서 시작해 비교가 깨진다.
+  // 채널 트래킹은 2025-04 중에 시작됐다(CH_FROM). 그 달은 부분치라 기준으로 쓰면
+  // 브랜드제휴 +2813% 같은 착시가 나온다. 온전해진 시점부터만 기준월 후보로 둔다.
+  const solidYms=yms.filter(y=>y>=CH_FROM&&major.length&&major.every(c=>get(y,c,trMetric)>0));
+  if(solidYms.length>=2&&major.length>=2){
+    const f=solidYms[0], l=solidYms[solidYms.length-1];
+    const mv=major.map(ch=>{const a=get(f,ch,trMetric),b=get(l,ch,trMetric);
+      return {ch,a,b,r:a?(b-a)/a:null};}).filter(x=>x.r!=null);
+    const srt=[...mv].sort((x,y)=>y.r-x.r);
+    const up=srt[0], dn=srt[srt.length-1];
+    // 실제로 오른 채널만 '성장', 내린 채널만 '감소'로 부른다.
+    // 후보가 하나뿐이면 같은 채널이 양쪽에 찍히므로 방향으로 걸러낸다.
+    const parts=[];
+    if(up&&up.r>0) parts.push(`성장 <b style="color:#10b981">${esc(up.ch)} ${delta(up.b,up.a)}</b>`);
+    if(dn&&dn.r<0&&dn.ch!==(up||{}).ch) parts.push(`감소 <b style="color:#ef4444">${esc(dn.ch)} ${delta(dn.b,dn.a)}</b>`);
+    document.getElementById('tr-foot').innerHTML=
+      (parts.length?`※ <b>${esc(f)} → ${esc(l)}</b>  `+parts.join(' · ')+
+        ` <span style="color:var(--t3)">(비중 1% 이상 ${major.length}개 채널 기준)</span><br>`:'')+
+      '※ 세션은 GA4 트래픽, 가입·첫구매·총수주는 라스트클릭 전환 기준입니다.';
+  } else {
+    document.getElementById('tr-foot').innerHTML='※ 기간을 2개월 이상으로 넓히면 증감이 표시됩니다.';
+  }
+}
+
+function renderChannelCurves(){
+  const chs=C.channels.filter(c=>{const s=chCurve(c);return s&&s.size>=1000;});
+  const maxK=14;
+  const labels=Array.from({length:maxK+1},(_,k)=>k+'M');
+  const ds=(key,scale)=>chs.map(ch=>{
+    const c=chCurve(ch);
+    return {label:ch,data:labels.map((_,k)=>c[key][k]==null?null:c[key][k]*scale),
+      borderColor:CH_COLOR[ch]||'#94a3b8',backgroundColor:CH_COLOR[ch]||'#94a3b8',
+      tension:.3,pointRadius:2,borderWidth:2,fill:false,spanGaps:true};
+  });
+  mk('c-chret',{type:'line',data:{labels,datasets:ds('ret',100).map(d=>({...d,data:d.data.map((v,k)=>k===0?null:v)}))},
+    options:{plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}},
+      tooltip:{callbacks:{label:c=>` ${c.dataset.label} ${c.raw==null?'—':c.raw.toFixed(1)+'%'}`}}},
+      scales:{x:GRID,y:{...GRID,ticks:{...GRID.ticks,callback:v=>v.toFixed(0)+'%'},beginAtZero:true}}}});
+  mk('c-chltv',{type:'line',data:{labels,datasets:ds('ltv',1)},
+    options:{plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}},
+      tooltip:{callbacks:{label:c=>` ${c.dataset.label} ${c.raw==null?'—':nf(c.raw)+'원'}`}}},
+      scales:{x:GRID,y:{...GRID,ticks:{...GRID.ticks,callback:v=>(v/1e4).toFixed(0)+'만'},beginAtZero:true}}}});
+}
+
+/* 전체 평균 대비 눈에 띄는 채널만 골라 문장으로. 숫자는 전부 chCurve 실측에서 가져온다. */
+function renderCohortComment(){
+  const box=document.getElementById('coh-comment');
+  const base=chCurve('__all__');
+  const rows=C.channels.map(ch=>[ch,chCurve(ch)])
+    .filter(([,c])=>c&&c.size>=1000&&c.ret1!=null)
+    .sort((a,b)=>b[1].ret1-a[1].ret1);
+  if(!rows.length||!base){ box.innerHTML='<div style="color:#94a3b8;font-size:12px">선택 기간에 비교할 코호트가 부족합니다.</div>'; return; }
+
+  const avg1=rows.reduce((a,[,c])=>a+c.ret1*c.size,0)/rows.reduce((a,[,c])=>a+c.size,0);
+  const out=[];
+  const line=(ch,txt)=>`<div class="cmt"><div class="dot" style="background:${CH_COLOR[ch]||'#94a3b8'}"></div><div>${txt}</div></div>`;
+
+  const [topCh,top]=rows[0], [botCh,bot]=rows[rows.length-1];
+  out.push(line(topCh,`<b>${esc(topCh)}</b> 1개월차 재구매율 <b>${pct(top.ret1)}</b> — 전 채널 최고이고 평균(${pct(avg1)})보다 ${((top.ret1-avg1)*100).toFixed(1)}%p 높습니다. 6개월 이후에도 ${pct(top.plat)}로 유지됩니다.`));
+  out.push(line(botCh,`<b>${esc(botCh)}</b>는 <b>${pct(bot.ret1)}</b>로 최저 — 평균 대비 ${((avg1-bot.ret1)*100).toFixed(1)}%p 낮습니다. 신규 ${nf(bot.size)}명을 데려왔지만 12개월 LTV는 ${bot.ltv12?nf(bot.ltv12)+'원':'—'}입니다.`));
+
+  // 규모는 큰데 잔존이 평균 이하인 채널 (획득량과 질이 어긋나는 지점)
+  const big=rows.filter(([ch,c])=>ch!==botCh&&c.size>=20000&&c.ret1<avg1)
+                .sort((a,b)=>b[1].size-a[1].size)[0];
+  if(big) out.push(line(big[0],`<b>${esc(big[0])}</b>는 신규 <b>${nf(big[1].size)}명</b>으로 규모가 큰데 재구매율은 ${pct(big[1].ret1)}로 평균 이하입니다. 획득량과 고객 질이 어긋나는 지점입니다.`));
+
+  // 잔존율 순위와 LTV 순위가 뒤집히는 채널 (초기 이탈은 크지만 객단가가 높은 유형)
+  const byLtv=rows.filter(([,c])=>c.ltv12).sort((a,b)=>b[1].ltv12-a[1].ltv12);
+  if(byLtv.length>2){
+    const flip=byLtv.find(([ch,c])=>{
+      const rRet=rows.findIndex(x=>x[0]===ch), rLtv=byLtv.findIndex(x=>x[0]===ch);
+      return rRet-rLtv>=2;});
+    if(flip) out.push(line(flip[0],`<b>${esc(flip[0])}</b>는 재구매율 순위(${rows.findIndex(x=>x[0]===flip[0])+1}위)보다 <b>12개월 LTV 순위(${byLtv.findIndex(x=>x[0]===flip[0])+1}위)</b>가 높습니다 — 자주 사지는 않아도 한 번에 크게 쓰는 유형입니다.`));
+  }
+
+  out.push(`<div class="cmt"><div class="dot" style="background:#cbd5e1"></div><div style="color:#64748b">기준: 2025-05 이후 코호트, 신규 1,000명 이상 채널만. 전체 가중평균 1개월차 재구매율 <b>${pct(avg1)}</b>.</div></div>`);
+  box.innerHTML=out.join('');
+}
+
+function renderCohort(){
+  const ch=document.getElementById('ch-sel').value;
+  const ci=cohortIndex(ch);
+  const cohorts=Object.keys(ci).sort();
+  const cc=chCurve(ch);
+
+  // KPI
+  const r1=cohorts.filter(c=>ci[c][1]).map(c=>ci[c][1].buyers/ci[c][0].buyers);
+  const avg1=r1.length?r1.reduce((a,b)=>a+b,0)/r1.length:null;
+  const size=cohorts.reduce((a,c)=>a+ci[c][0].buyers,0);
+  const cards=[
+    {k:'코호트 규모',v:nf(size),u:'명',d:`${cohorts.length}개 코호트 · ${ch==='__all__'?'2025-01~':'첫구매 채널 '+esc(ch)}`},
+    {k:'1개월차 재구매율',v:avg1==null?'—':pct(avg1),u:'',d:r1.length?`범위 ${pct(Math.min(...r1))}~${pct(Math.max(...r1))}`:'관측 코호트 없음'},
+    {k:'6개월+ 유지율',v:cc&&cc.plat!=null?pct(cc.plat):'—',u:'',d:'이 수준에서 평탄해집니다'},
+    {k:'12개월 누적 LTV',v:cc&&cc.ltv12?nf(cc.ltv12):'—',u:'원',d:'1인당 누적 총수주'}
+  ];
+  document.getElementById('coh-kpis').innerHTML=cards.map(x=>
+    `<div class="kpi ret"><div class="k">${x.k}</div><div class="v">${x.v}${(x.u&&x.v!=='—')?`<small>${x.u}</small>`:''}</div><div class="d">${x.d}</div></div>`).join('');
+
+  // 색 스케일
+  let maxRet=0,maxLtv=0;
+  for(const c of cohorts){const S=ci[c][0].buyers;let cum=0;
+    for(const k of Object.keys(ci[c]).map(Number).sort((a,b)=>a-b)){
+      cum+=ci[c][k].revenue; if(k>0)maxRet=Math.max(maxRet,ci[c][k].buyers/S); maxLtv=Math.max(maxLtv,cum/S);}}
+
+  const maxK=cohorts.length?Math.max(...cohorts.map(c=>Math.max(...Object.keys(ci[c]).map(Number)))):0;
+  let h='<thead><tr><th style="text-align:left">첫구매월</th><th>사이즈</th>';
+  for(let k=0;k<=maxK;k++) h+=`<th>${k}M</th>`;
+  h+='</tr></thead><tbody>';
+  for(const c of cohorts){
+    const row=ci[c],S=row[0].buyers;
+    h+=`<tr><td class="lab">${c}</td><td class="lab" style="text-align:right;color:#0f172a">${nf(S)}</td>`;
+    let cum=0;
+    for(let k=0;k<=maxK;k++){
+      const r=row[k];
+      if(!r){h+='<td><div class="c na">·</div></td>';continue;}
+      cum+=r.revenue; let val,t;
+      if(hmMode==='ret'){const v=r.buyers/S;val=(v*100).toFixed(k===0?0:1)+'%';t=k===0?1:Math.min(v/maxRet,1);}
+      else if(hmMode==='ltv'){const v=cum/S;val=Math.round(v/1000)+'k';t=Math.min(v/maxLtv,1);}
+      else {val=nf(r.buyers);t=Math.min(r.buyers/S,1);}
+      h+=`<td><div class="c" style="background:${hmColor(t)}">${val}</div></td>`;
+    }
+    h+='</tr>';
+  }
+  document.getElementById('t-hm').innerHTML=h+'</tbody>';
+
+  const legend={ret:'셀 = 해당 코호트 중 그 달에 구매한 비율. 0M은 정의상 100%.',
+    ltv:'셀 = 코호트 1인당 누적 총수주(천원).',cnt:'셀 = 그 달에 실제 구매한 인원수.'}[hmMode];
+  document.getElementById('hm-foot').innerHTML=`${legend}<br>`+
+    (ch==='__all__'
+      ? '※ 2025-01 이후 첫구매 고객만 담습니다 — 최신 월 구매자의 약 28%만 커버합니다.'
+      : `※ <b>${esc(ch)}</b>로 첫구매한 고객만. 첫구매 채널 트래킹은 2025-04 중 시작돼 이전은 <b>미상</b>입니다 — 채널 비교는 2025-05 이후 코호트로.`)+
+    '<br>※ 고객군(등급) 축은 등급 스냅샷 데이터가 오면 이 히트맵에 필터로 추가됩니다.';
+}
+
+/* ── 부팅 ── */
+async function loadJSON(urls){
+  let last;
+  for(const u of urls){
+    try{const r=await fetch(u,{cache:'no-store'}); if(r.ok) return await r.json(); last=`${u} → HTTP ${r.status}`;}
+    catch(e){last=`${u} → ${e.message}`;}
+  }
+  throw new Error(last);
+}
+(async()=>{
+  try{
+    // standalone 빌드는 데이터를 파일에 심어둔다 (file:// 에서는 로컬 fetch가 CORS로 막힘)
+    [D,C]=await Promise.all([
+      window.__EMBED_PMKT__   ? Promise.resolve(window.__EMBED_PMKT__)   : loadJSON(DATA_URLS),
+      window.__EMBED_COHORT__ ? Promise.resolve(window.__EMBED_COHORT__) : loadJSON(['growth_cohort_data.json'])
+    ]);
+    MONTHS=Object.keys(D.REAL_MONTHLY).filter(k=>D.REAL_MONTHLY[k].buyers).sort();
+    // 마지막 달은 진행중(MTD)이라 기본 기간에서 뺀다
+    const CLOSED=MONTHS.slice(0,-1).length?MONTHS.slice(0,-1):MONTHS;
+    PFROM=CLOSED[0]; PTO=CLOSED[CLOSED.length-1]; cur=PTO;
+
+    const fromSel=document.getElementById('mfrom'), toSel=document.getElementById('mto');
+    const opt=(m,selv)=>`<option value="${m}"${m===selv?' selected':''}>${m}${m===MONTHS[MONTHS.length-1]?' (진행중)':''}</option>`;
+    const fillSelects=()=>{
+      fromSel.innerHTML=MONTHS.map(m=>opt(m,PFROM)).join('');
+      toSel.innerHTML=MONTHS.map(m=>opt(m,PTO)).join('');
+    };
+    const clearPreset=()=>[...document.getElementById('presets').children].forEach(b=>b.classList.remove('on'));
+    const apply=()=>{ if(PFROM>PTO){const t=PFROM;PFROM=PTO;PTO=t;} fillSelects(); render(); };
+    fillSelects();
+    fromSel.onchange=e=>{PFROM=e.target.value;clearPreset();apply();};
+    toSel.onchange  =e=>{PTO  =e.target.value;clearPreset();apply();};
+
+    document.getElementById('presets').onclick=e=>{
+      const b=e.target.closest('button'); if(!b)return;
+      const k=b.dataset.p;
+      if(k==='all'){ PFROM=CLOSED[0]; PTO=CLOSED[CLOSED.length-1]; }
+      else if(k==='ytd'){ PTO=CLOSED[CLOSED.length-1];
+        const y=PTO.slice(0,4); PFROM=CLOSED.find(m=>m.startsWith(y))||CLOSED[0]; }
+      else { const n=+k; PTO=CLOSED[CLOSED.length-1]; PFROM=CLOSED[Math.max(0,CLOSED.length-n)]; }
+      clearPreset(); b.classList.add('on'); apply();
+    };
+
+    const chSel=document.getElementById('ch-sel');
+    chSel.innerHTML=`<option value="__all__">전체 채널</option>`+
+      C.channels.map(c=>`<option value="${esc(c)}">${esc(c)} (${nf(C.channel_sizes[c])}명)</option>`).join('');
+    document.getElementById('hm-toggle').onclick=e=>{
+      const b=e.target.closest('button'); if(!b)return;
+      hmMode=b.dataset.m;
+      [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));
+      renderCohort();
+    };
+    chSel.onchange=()=>{renderCohort();renderCohortComment();};
+
+    const bindToggle=(id,fn)=>{
+      document.getElementById(id).onclick=e=>{
+        const b=e.target.closest('button'); if(!b)return;
+        [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));
+        fn(b.dataset); renderChurnMatrix();
+      };
+    };
+    const tfSel=document.getElementById('tf-ch');
+    const tfChs=[...new Set((C.Q7_tier||[]).map(r=>r.channel))]
+      .sort((a,b)=>CH_ORDER.indexOf(a)-CH_ORDER.indexOf(b));
+    tfSel.innerHTML='<option value="__all__">전체 채널</option>'+
+      tfChs.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+    tfSel.onchange=e=>{tfCh=e.target.value;renderTierFunnel();};
+    document.getElementById('tf-dev').onclick=e=>{
+      const b=e.target.closest('button'); if(!b)return;
+      [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));
+      tfDev=b.dataset.d; renderTierFunnel();
+    };
+
+    document.getElementById('tr-metric').onclick=e=>{
+      const b=e.target.closest('button'); if(!b)return;
+      [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));
+      trMetric=b.dataset.m; renderChannelTrend();
+    };
+    document.getElementById('prio-sort').onclick=e=>{
+      const b=e.target.closest('button'); if(!b)return;
+      [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));
+      prioSort=b.dataset.s; renderPriority();
+    };
+    bindToggle('churn-basis',d=>{churnBasis=d.b;churnSel=null;renderPriority();});
+    bindToggle('churn-metric',d=>{churnMetric=d.k;});
+    bindToggle('churn-mode',  d=>{churnMode  =d.m;});
+    document.getElementById('t-churn').onclick=e=>{
+      const c=e.target.closest('.chc'); if(!c)return;
+      const t=c.dataset.t, b=+c.dataset.b;
+      churnSel=(churnSel&&churnSel.tier===t&&churnSel.band_no===b)?null:{tier:t,band_no:b};
+      renderChurnMatrix();
+    };
+    document.getElementById('gen').textContent=`데이터 ${D.generated}`;
+    // 섹션 앵커 + 상단 네비 (페이지가 6,000px를 넘어 스크롤만으로는 이동이 불편하다)
+    const navHtml=[...document.querySelectorAll('.sec h2')].map((h,i)=>{
+      const id='sec'+i; h.parentElement.id=id;
+      return `<a href="#${id}">${esc(h.textContent)}</a>`;
+    }).join('');
+    document.getElementById('secnav').innerHTML=navHtml;
+    document.getElementById('loading').style.display='none';
+    document.getElementById('app').style.display='';
+    render();
+  }catch(e){
+    document.getElementById('loading').style.display='none';
+    document.getElementById('fatal').innerHTML=
+      `<div class="err"><b>데이터를 불러오지 못했습니다.</b><br>${esc(e.message)}</div>`;
+  }
+})();
+</script>
+</body>
+</html>
