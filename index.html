@@ -233,6 +233,14 @@ canvas{max-width:100%}
     <div class="sec"><h2>2 · Channel Growth</h2><span class="badge b-real">실측</span>
       <span class="note">채널을 유입부터 재구매까지 한 줄로 — 획득 채널의 진짜 값어치</span></div>
     <div class="card" style="margin-bottom:13px">
+      <h3>획득 비용 (CAC) <span id="cac-badge"></span></h3>
+      <div class="h-sub">광고비 ÷ 신규 첫구매 — 집행은 DA·SA 두 갈래뿐</div>
+      <div class="grid g4" id="cac-kpis" style="margin-bottom:12px"></div>
+      <div class="scroll"><table id="t-cac"></table></div>
+      <div id="cac-cmt" style="margin-top:11px"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:13px">
       <h3>채널 진단 <span class="badge b-real">실측</span></h3>
       <div class="h-sub">규모(신규 획득) × 질(12개월 LTV) — 어디에 더 쓰고 어디서 뺄지</div>
       <div id="diag-cmt"></div>
@@ -459,6 +467,7 @@ function render(){
     (R.single?`${PFROM} 기준`:`${PFROM} ~ ${PTO} (${R.n}개월 누계)`) + ' · 단계 사이 숫자는 전환율';
   renderSpine(R);
   renderCustomer(R);
+  renderCAC();
   renderChannelDiag();
   renderChannelFunnel();
   renderChannelTrend();
@@ -921,6 +930,113 @@ const QUAD={
   grow:{t:'확대 여지',   c:'#1e40af', bg:'#dbeafe'},
   cut :{t:'축소 검토',   c:'#991b1b', bg:'#fee2e2'}
 };
+/* 광고비 x 신규 — 기간을 반드시 맞춰야 한다.
+   광고비는 일부 월만 있는데 신규는 전 기간을 세면 CAC가 그만큼 부풀어오른다.
+   그래서 선택 기간 ∩ 광고비 보유월로 자른 뒤에 양쪽을 센다.
+
+   blended 신규는 실적(REAL_MONTHLY.first)을 쓴다. CONV_CH 채널 합계는
+   멀티터치라 실적보다 약 18% 부풀어 있어 분모로 쓰면 CAC가 그만큼 낮게 나온다.
+   채널별(DA/SA)은 CONV_CH 말고는 출처가 없어 그대로 쓴다 — 둘을 섞어 비교하지 말 것. */
+function cacAgg(){
+  const COST=C.COST||{};
+  const ms=inRange().filter(m=>COST[m]);
+  if(!ms.length) return null;
+  const msCh=ms.filter(m=>m>=CH_FROM);      // 채널 귀속은 2025-05 부터라야 온전하다
+  const mk=()=>({cost:0,first:0,rev:0});
+  const out={DA:mk(),SA:mk()};
+  let cost=0, first=0, newRev=0;
+  for(const m of ms){
+    const c=COST[m];
+    cost   += c.total;
+    first  += (D.REAL_MONTHLY[m]||{}).first||0;
+    newRev += ((C.Q0_split||{})[m]||{}).first_revenue||0;
+    if(msCh.includes(m)){ out.DA.cost+=c.DA; out.SA.cost+=c.SA; }
+  }
+  // row 에 __total__ 이 채널과 나란히 들어 있다. 훑지 말고 DA/SA 만 집는다.
+  const setCh=new Set(msCh);
+  for(const [d,row] of Object.entries(D.CONV_CH)){
+    if(!setCh.has(d.slice(0,7))) continue;
+    for(const ch of ['DA','SA']){
+      const v=row[ch]; if(!v) continue;
+      out[ch].first+=v.first||0; out[ch].rev+=v.rev||0;
+    }
+  }
+  return {ms,msCh,out,cost,first,newRev};
+}
+
+function renderCAC(){
+  const A=cacAgg();
+  const badge=document.getElementById('cac-badge');
+  const kp=document.getElementById('cac-kpis'), tb=document.getElementById('t-cac');
+  const cm=document.getElementById('cac-cmt');
+  if(!A){
+    badge.innerHTML='<span class="badge b-soon">데이터 대기</span>';
+    kp.innerHTML=''; tb.innerHTML='';
+    cm.innerHTML='<div class="cmt"><div class="dot" style="background:#cbd5e1"></div><div>'+
+      '선택 기간에 광고비 데이터가 없습니다. 마스터파일 <code>5_raw_비용</code> 을 채운 뒤 '+
+      '<code>python extract_master.py</code> 를 돌리면 켜집니다.</div></div>';
+    return;
+  }
+  badge.innerHTML='<span class="badge b-real">실측</span>';
+  const {ms,msCh,out,cost,first,newRev}=A;
+  const cac=o=>o.first?o.cost/o.first:null;
+  const blended=first?cost/first:null;
+  const roas=cost?newRev/cost:null;
+  const ltv=ch=>{const c=chCurve(ch); return (c&&c.size>=1000)?c.ltv12:null;};
+  const won=v=>v==null?'—':nf(Math.round(v));
+
+  kp.innerHTML=[
+    {c:'',    k:`Blended CAC (${ms.length}개월)`, v:won(blended), u:'원',
+     d:'총광고비 ÷ 전체 신규 — 유기 유입까지 분모'},
+    {c:'ret', k:'SA CAC', v:won(cac(out.SA)), u:'원', d:'검색은 전환 직결이라 귀속이 비교적 타당'},
+    {c:'warn',k:'DA CAC', v:won(cac(out.DA)), u:'원', d:'last-click 귀속 — 과대평가된다'},
+    {c:'ret', k:'신규 ROAS', v:roas?roas.toFixed(1):'—', u:'배', d:'신규가 만든 총수주 ÷ 총광고비'}
+  ].map(x=>
+    `<div class="kpi ${x.c}"><div class="k">${x.k}</div><div class="v">${x.v}`+
+    `${(x.u&&x.v!=='—')?`<small>${x.u}</small>`:''}</div><div class="d">${x.d}</div></div>`).join('');
+
+  const rows=[['SA',out.SA],['DA',out.DA]].filter(([,o])=>o.cost);
+  const chCost=out.DA.cost+out.SA.cost;
+  tb.innerHTML=
+    '<thead><tr><th>채널</th><th>광고비</th><th>신규</th><th>CAC</th>'+
+    '<th>12M LTV</th><th>LTV÷CAC</th><th>비용비중</th></tr></thead><tbody>'+
+    rows.map(([ch,o])=>{
+      const cc=cac(o), lv=ltv(ch), x=(cc&&lv)?lv/cc:null;
+      const xc=x==null?'#94a3b8':(x>=3?'#065f46':(x>=1?'#92400e':'#991b1b'));
+      return `<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;`+
+        `background:${CH_COLOR[ch]||'#cbd5e1'};margin-right:6px"></span>${ch}</td>`+
+        `<td>${eok(o.cost)}억</td><td>${nf(o.first)}</td><td>${won(cc)}</td>`+
+        `<td>${lv?nf(lv):'—'}</td>`+
+        `<td style="color:${xc};font-weight:800">${x?x.toFixed(2)+'x':'—'}</td>`+
+        `<td>${pct(o.cost/chCost,0)}</td></tr>`;
+    }).join('')+
+    `<tr class="tot"><td>전체(blended)</td><td>${eok(cost)}억</td><td>${nf(first)}</td>`+
+    `<td>${won(blended)}</td><td>—</td><td>—</td><td>100%</td></tr></tbody>`;
+
+  // 해석 — 숫자만 두면 "DA를 줄여라"로 잘못 읽힌다. 한계를 같이 적는다.
+  const line=(c,t)=>`<div class="cmt"><div class="dot" style="background:${c}"></div><div>${t}</div></div>`;
+  const daC=cac(out.DA), saC=cac(out.SA), o=[];
+  if(daC&&saC) o.push(line(CH_COLOR.DA,
+    `<b>DA CAC ${won(daC)}원</b>은 SA(${won(saC)}원)의 <b>${(daC/saC).toFixed(1)}배</b>지만 `+
+    `<b>DA가 나쁘다는 뜻이 아닙니다.</b> 첫구매 채널이 last-click 기준이라, DA가 만든 인지·유입이 `+
+    `Organic·SA 전환으로 넘어가 DA에는 비용만 남고 분모에는 소수만 잡힙니다. `+
+    `DA 비용비중이 <b>${pct(out.DA.cost/chCost,0)}</b>인데 last-click 신규는 `+
+    `<b>${pct(out.DA.first/(out.DA.first+out.SA.first),0)}</b>뿐인 게 그 증거입니다. `+
+    `<b>DA는 CAC 단독으로 판단하지 마십시오</b> — 증분 실험(중단 테스트)이라야 진짜 기여가 나옵니다.`));
+  o.push(line('#94a3b8',
+    `<b>Blended CAC ${won(blended)}원</b>이 지금으로선 가장 믿을 만한 지표입니다. `+
+    `광고비 전액을 전체 신규로 나눠 귀속 문제를 우회합니다. `+
+    `단 <b>유기 유입도 분모에 들어가</b> 실제 유료 획득단가보다 낮게 나옵니다.`+
+    (roas?` 같은 기간 신규 ROAS는 <b>${roas.toFixed(1)}배</b>입니다.`:'')));
+  const gapMs=inRange().filter(m=>!(C.COST||{})[m]);
+  o.push(line('#cbd5e1',
+    `광고비 보유 <b>${ms[0]} ~ ${ms[ms.length-1]}</b> (${ms.length}개월)`+
+    (msCh.length<ms.length?` · 채널별 CAC는 귀속이 온전한 <b>${CH_FROM} 이후 ${msCh.length}개월</b>만 사용`:'')+
+    (gapMs.length?` · 선택 기간 중 <b>${gapMs.length}개월</b>은 광고비가 없어 제외`:'')+
+    ` · CRM·PCS 등 나머지 채널 비용은 아직 없습니다.`));
+  cm.innerHTML=o.join('');
+}
+
 function renderChannelDiag(){
   const agg=channelAgg(), tot=agg.__total__||{};
   const rows=CH_ORDER.map(ch=>{
