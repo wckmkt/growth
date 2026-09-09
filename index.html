@@ -1443,10 +1443,18 @@ function renderCAC(){
     (roas?` 같은 기간 신규 ROAS는 <b>${roas.toFixed(1)}배</b>입니다.`:'')));
   const gapMs=inRange().filter(m=>!(C.COST||{})[m]);
   const bkm=[...new Set((C.Q8_basket_mx||[]).map(r=>r.ym))].sort();
-  if(bkm.length) o.push(line('#cbd5e1',
-    `<b>보정 CAC</b>는 장바구니 담은 채널 대비 같은 채널 주문 비율(3 · Intent &amp; Conversion 의 대각선)을 곱한 값입니다. `+
-    `그 비율은 <b>${esc(bkm[0])}~${esc(bkm[bkm.length-1])}</b> 장바구니 데이터로 잰 것이라 `+
-    `<b>광고비 기간과 겹치지 않습니다</b> — 귀속 왜곡의 크기를 가늠하는 추정치로만 쓰십시오.`));
+  if(bkm.length){
+    // 보정계수를 잰 기간이 광고비 기간과 겹치는지에 따라 신뢰도가 갈린다
+    const ov=ms.filter(m=>bkm.includes(m));
+    o.push(line('#cbd5e1',
+      `<b>보정 CAC</b>는 장바구니 담은 채널 대비 같은 채널 주문 비율(3 · Intent &amp; Conversion 의 대각선)을 곱한 값입니다. `+
+      `그 비율은 <b>${esc(bkm[0])}~${esc(bkm[bkm.length-1])}</b> 장바구니 데이터로 쟀습니다`+
+      (ov.length===ms.length
+        ? ` — 광고비 기간과 <b>완전히 겹칩니다</b>.`
+        : ov.length
+          ? ` — 광고비 기간 ${ms.length}개월 중 <b>${ov.length}개월</b>이 겹칩니다.`
+          : ` — <b>광고비 기간과 겹치지 않아</b> 왜곡의 크기를 가늠하는 추정치로만 쓰십시오.`)));
+  }
   o.push(line('#cbd5e1',
     `광고비 보유 <b>${ms[0]} ~ ${ms[ms.length-1]}</b> (${ms.length}개월)`+
     (msCh.length<ms.length?` · 채널별 CAC는 귀속이 온전한 <b>${CH_FROM} 이후 ${msCh.length}개월</b>만 사용`:'')+
