@@ -761,13 +761,18 @@ function renderChurnCurve(){
      ym  log_from  log_to  asof  log_days
    아직 없으면 골격만 그린다. TSV가 들어오면 코드 수정 없이 켜진다. */
 const CHURN_TIERS=['W SIGNATURE','W VIP','W BEST','W FRIEND'];
+/* 경계 D7/14/21/30/60/90/180 — 2026-09-09 확정.
+   SQL(2_churn_matrix [2])의 band_no 와 반드시 같아야 한다. 어긋나면 셀이 빈다. */
 const CHURN_BANDS=[
   {no:1,name:'초단기', range:'D0~6',    hint:'1주 이내'},
-  {no:2,name:'단기',   range:'D7~27',   hint:'1~4주'},
-  {no:3,name:'중기',   range:'D28~89',  hint:'1~3개월'},
-  {no:4,name:'장기',   range:'D90~179', hint:'3~6개월'},
-  {no:5,name:'초장기', range:'D180+',   hint:'6개월 초과'},
-  {no:6,name:'무접점', range:'—',       hint:'로그인/구매 이력 없음'}
+  {no:2,name:'단기1',  range:'D7~13',   hint:'1~2주'},
+  {no:3,name:'단기2',  range:'D14~20',  hint:'2~3주'},
+  {no:4,name:'단기3',  range:'D21~29',  hint:'3~4주'},
+  {no:5,name:'중기1',  range:'D30~59',  hint:'1~2개월'},
+  {no:6,name:'중기2',  range:'D60~89',  hint:'2~3개월'},
+  {no:7,name:'장기',   range:'D90~179', hint:'3~6개월'},
+  {no:8,name:'초장기', range:'D180+',   hint:'6개월 초과'},
+  {no:9,name:'무접점', range:'—',       hint:'로그인/구매 이력 없음'}
 ];
 /* 이미지2의 채널 계획 — 데이터가 아니라 운영 룰이라 정적으로 둔다.
    등급별로 갈리지 않고 구간별로만 갈린다(현 계획 기준). */
@@ -805,7 +810,20 @@ const CHURN_METRICS={
 // Q5 재추출(orders_365d / buyers_365d)이 와야 켜지는 지표
 const CHURN_NEEDS_NEW={cvr:1,byr:1,ord:1,aov:1,arpu:1};
 /* 활성(파랑) → 이탈(빨강)으로 가는 순서색. 미니 스택바와 헤더 칩에 함께 쓴다 */
-const BAND_COLOR={1:'#22c55e',2:'#84cc16',3:'#f59e0b',4:'#f97316',5:'#ef4444',6:'#94a3b8'};
+/* 활성(단기까지)과 이탈위험(중기부터)을 가르는 밴드 번호.
+   경계가 바뀌면 여기만 고치면 표의 세로 구분선이 따라온다. */
+const ACTIVE_EDGE=5;
+/* 2026-09-09 경계 변경 전(7/28/90/180)에 뽑은 데이터용.
+   재추출이 끝나면 지워도 된다. */
+const CHURN_BANDS_OLD=[
+  {no:1,name:'초단기', range:'D0~6',    hint:'1주 이내'},
+  {no:2,name:'단기',   range:'D7~27',   hint:'1~4주'},
+  {no:3,name:'중기',   range:'D28~89',  hint:'1~3개월'},
+  {no:4,name:'장기',   range:'D90~179', hint:'3~6개월'},
+  {no:5,name:'초장기', range:'D180+',   hint:'6개월 초과'},
+  {no:6,name:'무접점', range:'—',       hint:'로그인/구매 이력 없음'}
+];
+const BAND_COLOR={1:'#22c55e',2:'#65a30d',3:'#84cc16',4:'#eab308',5:'#f59e0b',6:'#f97316',7:'#ef4444',8:'#b91c1c',9:'#94a3b8'};
 
 /* 스냅샷은 월별로 쌓인다. 기간 설정의 마지막 달(PTO) 이하 중 가장 최근 것을 쓴다.
    login 기준은 소급이 불가해 최신 1개월만 있으므로, 그 달에 없으면 order로 자동 전환한다. */
@@ -836,8 +854,17 @@ function renderChurnMatrix(){
   const rows=snap.rows, has=rows.length>0;
   const idx={}; rows.forEach(r=>{idx[r.tier+'|'+r.band_no]=r;});
   const isOrder=snap.basis==='order';
+
+  /* 경계 변경 전 데이터는 밴드가 6개뿐이다. 새 라벨을 씌우면 구 6번(무접점)이
+     신 6번(중기2)으로 보이는 식으로 조용히 틀린다 — 구 정의로 그린다. */
+  const maxB=Math.max(0,...rows.map(r=>+r.band_no||0));
+  const stale=rows.length>0&&maxB<=6;
+  const BANDS=stale?CHURN_BANDS_OLD:CHURN_BANDS;
+  const EDGE=stale?3:ACTIVE_EDGE;
   document.getElementById('churn-badge').innerHTML =
-    has?'<span class="badge b-real">실측</span>':'<span class="badge b-soon">데이터 대기</span>';
+    !has ? '<span class="badge b-soon">데이터 대기</span>'
+    : stale ? '<span class="badge b-real">실측</span> <span class="badge b-soon">구 경계</span>'
+    : '<span class="badge b-real">실측</span>';
 
   // 새 컬럼이 아직 없으면 그 지표는 못 그린다 — 버튼을 잠그고 고객수로 되돌린다
   const hasNew=rows.some(r=>r.buyers_365d!=null);
@@ -859,15 +886,15 @@ function renderChurnMatrix(){
     b.classList.toggle('on',b.dataset.m===(shareOn?'share':'abs'));
   });
 
-  const cSum=t=>CHURN_BANDS.reduce((a,b)=>a+((idx[t+'|'+b.no]||{}).customers||0),0);
-  const mSum=t=>CHURN_BANDS.reduce((a,b)=>{
+  const cSum=t=>BANDS.reduce((a,b)=>a+((idx[t+'|'+b.no]||{}).customers||0),0);
+  const mSum=t=>BANDS.reduce((a,b)=>{
     const r=idx[t+'|'+b.no]; return a+(r?(M.g(r)||0):0);},0);
   // 색은 행(등급) 안에서 정규화한다. 전체 max로 잡으면 규모가 큰 등급 하나가
   // 스케일을 독점해 나머지 행이 전부 창백해진다.
   const rowMax={};
   for(const t of CHURN_TIERS){
     const ms=mSum(t); let m=0;
-    for(const b of CHURN_BANDS){
+    for(const b of BANDS){
       const r=idx[t+'|'+b.no]; if(!r) continue;
       const raw=M.g(r);
       const v=shareOn?(ms?raw/ms:0):raw;
@@ -877,8 +904,8 @@ function renderChurnMatrix(){
   }
 
   let h='<thead><tr><th style="text-align:left">등급 \ '+(isOrder?'마지막 구매':'마지막 로그인')+'</th>';
-  for(const b of CHURN_BANDS)
-    h+=`<th class="${b.no===3?'bd':''}">`+
+  for(const b of BANDS)
+    h+=`<th class="${b.no===EDGE?'bd':''}">`+
        `<span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:${BAND_COLOR[b.no]};margin-right:4px"></span>`+
        `${b.name}<br><span style="font-weight:600;color:#cbd5e1">${b.range}</span></th>`;
   h+='<th>합계 · 구성</th></tr></thead><tbody>';
@@ -886,9 +913,9 @@ function renderChurnMatrix(){
   for(const t of CHURN_TIERS){
     const sum=cSum(t), ms=mSum(t);
     h+=`<tr><td class="lab">${t}</td>`;
-    for(const b of CHURN_BANDS){
+    for(const b of BANDS){
       const r=idx[t+'|'+b.no];
-      const edge=(b.no===3)?' bd':'';        // 활성(초단기·단기) / 이탈위험(중기~) 경계
+      const edge=(b.no===EDGE)?' bd':'';   // 활성(D0~29) / 이탈위험(D30+) 경계
       if(!r){ h+=`<td class="${edge.trim()}"><div class="c na">·</div></td>`; continue; }
       const raw=M.g(r);
       const v=shareOn?(ms?raw/ms:0):raw;
@@ -901,7 +928,7 @@ function renderChurnMatrix(){
          ` style="background:${hmColor(m?Math.min(v/m,1):null)};cursor:pointer">${txt}`+
          `<span class="sub2">${sub}</span></div></td>`;
     }
-    const seg=CHURN_BANDS.map(b=>{
+    const seg=BANDS.map(b=>{
       const r=idx[t+'|'+b.no]; const w=(sum&&r)?r.customers/sum*100:0;
       return w?`<i style="width:${w.toFixed(2)}%;background:${BAND_COLOR[b.no]}"></i>`:'';
     }).join('');
@@ -946,7 +973,10 @@ function renderChurnAction(idx){
   const box=document.getElementById('churn-action');
   if(!churnSel){ box.innerHTML=''; return; }
   const a=CHURN_ACTION[churnSel.band_no]||{};
-  const b=CHURN_BANDS.find(x=>x.no===churnSel.band_no)||{};
+  // 선택 셀 라벨도 데이터 스킴을 따라가야 한다 (구 데이터면 구 정의)
+  const sn=churnSnapshot(), mx=Math.max(0,...sn.rows.map(r=>+r.band_no||0));
+  const defs=(sn.rows.length&&mx<=6)?CHURN_BANDS_OLD:CHURN_BANDS;
+  const b=defs.find(x=>x.no===churnSel.band_no)||{};
   const r=idx[churnSel.tier+'|'+churnSel.band_no];
   box.innerHTML=
     `<div class="act">
