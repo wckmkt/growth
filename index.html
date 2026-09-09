@@ -1018,14 +1018,17 @@ const bkPartial=()=>{const y=(C.Q8_basket_ch||[]).map(r=>r.ym); return y.length?
 function bkAggCh(){
   const o={};
   (C.Q8_basket_ch||[]).filter(bkIn).forEach(r=>{
-    const t=o[r.ch]||(o[r.ch]={baskets:0,users:0,orders:0,months:0});
-    t.baskets+=r.baskets; t.orders+=r.orders; t.users+=r.users; t.months++;
+    const t=o[r.ch]||(o[r.ch]={baskets:0,conv:0,orders:0,users:0,months:0,hasOrd:false});
+    t.baskets+=r.baskets; t.conv+=(r.conv||0); t.users+=r.users; t.months++;
+    if(r.orders!=null){ t.orders+=r.orders; t.hasOrd=true; }
   });
   // 전환율은 여기서 합산 후 계산한다. 월별 비율을 평균내면 볼륨 가중이 무너진다.
   // users 는 월별 유니크라 더하면 같은 고객이 개월수만큼 겹친다(전 채널 합이 회원
   // 총수를 넘겼다). 규모를 보여주는 용도이므로 월평균으로 환산한다.
   Object.values(o).forEach(t=>{
-    t.rate=t.baskets?t.orders/t.baskets:null;
+    // 전환율 분자는 '팔린 장바구니 행'이다. 주문 수로 나누면 한 주문이
+    // 여러 행을 덮는 만큼 과소평가된다.
+    t.rate=t.baskets?t.conv/t.baskets:null;
     t.userAvg=t.months?t.users/t.months:null;
   });
   return o;
@@ -1075,13 +1078,18 @@ function renderBasket(){
 }
 
 function renderBkCh(agg,chs,tiny){
-  const tot=chs.reduce((a,c)=>({b:a.b+agg[c].baskets,o:a.o+agg[c].orders}),{b:0,o:0});
+  const tot=chs.reduce((a,c)=>({b:a.b+agg[c].baskets,o:a.o+agg[c].conv,
+                               ord:a.ord+agg[c].orders,
+                               hasOrd:a.hasOrd||agg[c].hasOrd}),
+                       {b:0,o:0,ord:0,hasOrd:false});
   const rate=tot.b?tot.o/tot.b:null;
   const rk=chs.filter(c=>agg[c].baskets>=5000).sort((a,b)=>agg[b].rate-agg[a].rate);
   const best=rk[0], worst=rk[rk.length-1];
 
   document.getElementById('bk-kpis').innerHTML=[
-    {c:'',    k:'전체 장바구니 담기 → 구매', v:pct(rate), u:'', d:`장바구니 담기 ${nf(tot.b)}건 중 ${nf(tot.o)}건 전환`},
+    {c:'',    k:'전체 장바구니 담기 → 구매', v:pct(rate), u:'',
+     d:`담기 ${nf(tot.b)}건 중 ${nf(tot.o)}건 전환`+
+       (tot.hasOrd?` · 주문 ${nf(tot.ord)}건`:'')},
     {c:'ret', k:`최고 · ${best||'—'}`, v:best?pct(agg[best].rate):'—', u:'',
      d:'장바구니 담기 5천건 이상 채널 중'},
     {c:'warn',k:`최저 · ${worst||'—'}`, v:worst?pct(agg[worst].rate):'—', u:'',
@@ -1093,15 +1101,16 @@ function renderBkCh(agg,chs,tiny){
 
   const mx=Math.max(...chs.map(c=>agg[c].rate||0))||1;
   document.getElementById('t-bkch').innerHTML=
-    '<thead><tr><th>채널</th><th>장바구니 담기</th><th>구매전환</th><th>전환율</th>'+
-    '<th>월평균 담은 고객수</th><th style="width:30%">　</th></tr></thead><tbody>'+
+    '<thead><tr><th>채널</th><th>장바구니 담기</th><th>전환 담기</th><th>전환율</th>'+
+    '<th>주문</th><th>월평균 담은 고객수</th><th style="width:26%">　</th></tr></thead><tbody>'+
     chs.sort((a,b)=>agg[b].rate-agg[a].rate).map(c=>{
       const t=agg[c], w=t.rate?(t.rate/mx*100):0;
       const col=CH_COLOR[c]||'#cbd5e1';
       return `<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;`+
         `background:${col};margin-right:6px"></span>${esc(c)}</td>`+
-        `<td>${nf(t.baskets)}</td><td>${nf(t.orders)}</td>`+
+        `<td>${nf(t.baskets)}</td><td>${nf(t.conv)}</td>`+
         `<td style="font-weight:800">${pct(t.rate)}</td>`+
+        `<td>${t.hasOrd?nf(t.orders):'—'}</td>`+
         `<td>${t.userAvg?nf(Math.round(t.userAvg)):'—'}</td>`+
         `<td><div style="background:${col};height:9px;border-radius:3px;width:${w.toFixed(1)}%"></div></td></tr>`;
     }).join('')+'</tbody>';
@@ -1115,6 +1124,8 @@ function renderBkCh(agg,chs,tiny){
     `※ 전환율은 기간 전체를 합산해 다시 계산합니다(월별 비율의 평균이 아님).`+
     (narrow?`<br>※ 장바구니 데이터는 <b>${esc(bm[0])}~${esc(bm[bm.length-1])}</b>만 있어 `+
             `선택 기간(${esc(PFROM)}~${esc(PTO)})과 다릅니다. 위 숫자는 그 구간만의 값입니다.`:'')+
+    `<br>※ <b>전환 담기</b>는 팔린 장바구니 행 수, <b>주문</b>은 실제 주문 수입니다. `+
+    `한 주문이 장바구니 여러 행을 덮어 둘이 다릅니다 — 전환율 분자는 <b>전환 담기</b>입니다.`+
     `<br>※ <b>월평균 담은 고객수</b>는 월별 유니크라 합산하지 않고 평균을 냅니다 `+
     `(합산하면 같은 고객이 개월수만큼 겹칩니다).`+
     (p&&p>=PFROM&&p<=PTO
