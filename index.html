@@ -57,7 +57,7 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',sans-serif
 
 /* 퍼널 스파인 */
 .spine{background:linear-gradient(135deg,#0B1D3A,#1E3A6E);border-radius:var(--r);padding:20px 22px;color:#fff;overflow-x:auto}
-.spine-row{display:flex;align-items:stretch;gap:0;min-width:900px}
+.spine-row{display:flex;align-items:stretch;gap:0;min-width:1080px}
 .stage{flex:1;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:9px;padding:13px 14px;min-width:0}
 .stage.gap{background:rgba(239,68,68,.13);border-color:rgba(252,165,165,.45)}
 .stage .st{font-size:10.5px;font-weight:800;color:#93b4e8;letter-spacing:.3px}
@@ -297,8 +297,43 @@ canvas{max-width:100%}
       </div>
     </div>
 
-    <!-- 3) Cohort & LTV -->
-    <div class="sec"><h2>3 · Cohort &amp; LTV</h2><span class="badge b-real">실측</span>
+    <!-- 3) Intent & Conversion -->
+    <div class="sec"><h2>3 · Intent &amp; Conversion</h2><span id="bk-badge"></span>
+      <span class="note">담은 다음에 무슨 일이 생기나 — <b>주문 DB 기준</b>.
+        위 등급별 퍼널의 장바구니는 GA4 이벤트라 숫자가 다릅니다. 섞어 쓰지 마세요</span></div>
+    <div id="bk-need"></div>
+    <div id="bk-body" style="display:none">
+      <div class="grid g4" id="bk-kpis"></div>
+
+      <div class="card" style="margin-top:13px">
+        <h3>채널별 담기 → 구매 전환율</h3>
+        <div class="h-sub">담기 후 31일 내 주문완료 · 세션 수로는 안 보이던 채널 품질 격차</div>
+        <div class="scroll"><table id="t-bkch"></table></div>
+        <div id="bkch-foot" style="margin-top:11px;font-size:11.5px;color:var(--t2);line-height:1.7"></div>
+      </div>
+
+      <div class="card" style="margin-top:13px">
+        <h3>담기 채널 → 구매 채널</h3>
+        <div class="h-sub">대각선이 채널 유지 · Organic 열이 라스트클릭 기준 이탈분</div>
+        <div class="scroll"><table class="hm" id="t-bkmx"></table></div>
+        <div id="bkmx-foot" style="margin-top:11px"></div>
+      </div>
+
+      <div class="card" style="margin-top:13px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+          <div>
+            <h3 style="margin-bottom:3px">담기 → 구매 소요시간</h3>
+            <div class="h-sub" style="margin:0">누적 전환 도달률 — CRM 발송 타이밍 근거</div>
+          </div>
+          <select class="chsel" id="bk-lat-ch"></select>
+        </div>
+        <div style="height:270px"><canvas id="c-bklat"></canvas></div>
+        <div id="bklat-foot" style="margin-top:11px"></div>
+      </div>
+    </div>
+
+    <!-- 4) Cohort & LTV -->
+    <div class="sec"><h2>4 · Cohort &amp; LTV</h2><span class="badge b-real">실측</span>
       <span class="note">첫구매월 × 채널 · <b>상단 기간 설정과 무관하게 전체 구간</b> — 고객군 축(등급)은 데이터 도착 시 추가</span></div>
     <div class="grid g4" id="coh-kpis"></div>
     <div class="card" style="margin-top:13px">
@@ -325,8 +360,8 @@ canvas{max-width:100%}
       <div class="scroll"><table class="hm" id="t-hm"></table></div>
       <div id="hm-foot" style="margin-top:11px;font-size:11.5px;color:var(--t2);line-height:1.7"></div>
     </div>
-    <!-- 4) Product & Category -->
-    <div class="sec"><h2>4 · Product &amp; Category Growth</h2><span class="badge b-need">데이터 필요</span>
+    <!-- 5) Product & Category -->
+    <div class="sec"><h2>5 · Product &amp; Category Growth</h2><span class="badge b-need">데이터 필요</span>
       <span class="note">어떤 브랜드/카테고리가 신규 고객을 만들고 있는지</span></div>
     <div class="need">
       <h3>현재 확보된 데이터에 상품 축이 전혀 없습니다</h3>
@@ -484,6 +519,7 @@ function render(){
   renderPriority();
   renderDepth();
   renderChurnCurve();
+  renderBasket();
   renderCohort();
   renderCohortComment();
 }
@@ -929,12 +965,209 @@ function renderChurnAction(idx){
      </div>`;
 }
 
+/* ══ 3 · Intent & Conversion — 장바구니 담기 → 구매 (주문 DB 기준) ══
+   GA4 카트(Q7 carts, TRAFFIC.c)와 다른 소스다. 숫자가 어긋나는 게 정상이다. */
+
+const bkIn=r=>r.ym>=PFROM&&r.ym<=PTO;
+
+/* 매트릭스는 행과 열을 같은 순서로 놓아야 대각선(=채널 유지)이 한 줄로 읽힌다.
+   유지율순으로 행만 정렬하면 대각선이 흩어져 오히려 보기 어렵다.
+   그래서 볼륨 감각에 맞춘 고정 순서를 쓴다. */
+const BK_ORDER=['Organic','DA','SA','CRM','PCS','OwnedMedia','W크리에이터','브랜드제휴'];
+const bkOrd=a=>BK_ORDER.filter(c=>a.includes(c)).concat(a.filter(c=>!BK_ORDER.includes(c)));
+
+/* 담기가 이 미만인 채널은 표에서 뺀다. Offline 처럼 2건짜리가 전환율 100% 로
+   맨 위에 올라와 시선을 뺏는다. 목록에서 지우는 게 아니라 푸터에 몇 개 뺐는지 적는다.
+   임계값으로 거르므로 새 채널도 볼륨만 붙으면 자동으로 나타난다. */
+const BK_MIN=100;
+
+/* 마지막 달은 담기 후 31일이 안 지난 건이 빠져 있어 '볼륨'만 부분집계다.
+   전환율은 관측이 끝난 건들만 들어오므로 그대로 유효하다. */
+const bkPartial=()=>{const y=(C.Q8_basket_ch||[]).map(r=>r.ym); return y.length?y.sort().slice(-1)[0]:null;};
+
+function bkAggCh(){
+  const o={};
+  (C.Q8_basket_ch||[]).filter(bkIn).forEach(r=>{
+    const t=o[r.ch]||(o[r.ch]={baskets:0,users:0,orders:0});
+    t.baskets+=r.baskets; t.users+=r.users; t.orders+=r.orders;
+  });
+  // 전환율은 여기서 합산 후 계산한다. 월별 비율을 평균내면 볼륨 가중이 무너진다.
+  Object.values(o).forEach(t=>t.rate=t.baskets?t.orders/t.baskets:null);
+  return o;
+}
+
+function renderBasket(){
+  const need=document.getElementById('bk-need'), body=document.getElementById('bk-body');
+  const badge=document.getElementById('bk-badge');
+  const agg=bkAggCh();
+  const chs=bkOrd(Object.keys(agg).filter(c=>agg[c].baskets>=BK_MIN));
+  const tiny=Object.keys(agg).filter(c=>agg[c].baskets<BK_MIN);
+  if(!chs.length){
+    badge.innerHTML='<span class="badge b-soon">데이터 대기</span>';
+    body.style.display='none';
+    need.innerHTML='<div class="need"><h3>장바구니 데이터가 아직 없습니다</h3>'+
+      '<div class="h-sub">마스터 엑셀에 아래 3개 시트를 채우면 바로 켜집니다 — '+
+      '쿼리는 <code>sql/Q8_basket.sql</code></div>'+
+      '<pre>Q8_basket_ch    ym, channel, baskets, basket_users, orders\n'+
+      'Q8_basket_mx    ym, basket_channel, order_channel, orders\n'+
+      'Q8_basket_lat   ym, channel, bucket, cnt\n\n'+
+      '   → 담기 완료(baskettype=\'B\') 기준, 전환은 담기 후 31일 내 주문완료\n'+
+      '   → 채널 하한 2025-05 (channel_id 2025-04 개발 완료)</pre></div>';
+    return;
+  }
+  badge.innerHTML='<span class="badge b-real">실측</span>';
+  need.innerHTML=''; body.style.display='';
+  renderBkCh(agg,chs,tiny);
+  renderBkMx(chs);
+  renderBkLat(chs);
+}
+
+function renderBkCh(agg,chs,tiny){
+  const tot=chs.reduce((a,c)=>({b:a.b+agg[c].baskets,o:a.o+agg[c].orders}),{b:0,o:0});
+  const rate=tot.b?tot.o/tot.b:null;
+  const rk=chs.filter(c=>agg[c].baskets>=5000).sort((a,b)=>agg[b].rate-agg[a].rate);
+  const best=rk[0], worst=rk[rk.length-1];
+
+  document.getElementById('bk-kpis').innerHTML=[
+    {c:'',    k:'전체 담기 → 구매', v:pct(rate), u:'', d:`담기 ${nf(tot.b)}건 중 ${nf(tot.o)}건 전환`},
+    {c:'ret', k:`최고 · ${best||'—'}`, v:best?pct(agg[best].rate):'—', u:'',
+     d:'담기 5천건 이상 채널 중'},
+    {c:'warn',k:`최저 · ${worst||'—'}`, v:worst?pct(agg[worst].rate):'—', u:'',
+     d:best&&worst?`최고 대비 ${(agg[best].rate/agg[worst].rate).toFixed(1)}배 격차`:''},
+    {c:'',    k:'담기 볼륨', v:nf(tot.b), u:'건', d:oneMonth()?`${PFROM} 기준`:`${PFROM}~${PTO} 누계`}
+  ].map(x=>`<div class="kpi ${x.c}"><div class="k">${x.k}</div><div class="v">${x.v}`+
+    `${(x.u&&x.v!=='—')?`<small>${x.u}</small>`:''}</div><div class="d">${x.d}</div></div>`).join('');
+
+  const mx=Math.max(...chs.map(c=>agg[c].rate||0))||1;
+  document.getElementById('t-bkch').innerHTML=
+    '<thead><tr><th>채널</th><th>담기</th><th>담은 고객</th><th>구매전환</th>'+
+    '<th>전환율</th><th style="width:34%">　</th></tr></thead><tbody>'+
+    chs.sort((a,b)=>agg[b].rate-agg[a].rate).map(c=>{
+      const t=agg[c], w=t.rate?(t.rate/mx*100):0;
+      const col=CH_COLOR[c]||'#cbd5e1';
+      return `<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;`+
+        `background:${col};margin-right:6px"></span>${esc(c)}</td>`+
+        `<td>${nf(t.baskets)}</td><td>${nf(t.users)}</td><td>${nf(t.orders)}</td>`+
+        `<td style="font-weight:800">${pct(t.rate)}</td>`+
+        `<td><div style="background:${col};height:9px;border-radius:3px;width:${w.toFixed(1)}%"></div></td></tr>`;
+    }).join('')+'</tbody>';
+
+  const p=bkPartial();
+  document.getElementById('bkch-foot').innerHTML=
+    `※ 전환율은 기간 전체를 합산해 다시 계산합니다(월별 비율의 평균이 아님).`+
+    (p&&p>=PFROM&&p<=PTO
+      ? `<br>※ <b>${esc(p)}</b>은 담기 후 31일이 지나지 않은 건이 빠져 <b>담기 볼륨만 부분집계</b>입니다. 전환율은 유효합니다.`
+      : '')+
+    (tiny&&tiny.length
+      ? `<br>※ 담기 ${BK_MIN}건 미만이라 제외: ${tiny.map(c=>`${esc(c)}(${nf(agg[c].baskets)}건)`).join(', ')}`
+      : '');
+}
+
+/* 세 시트는 따로 도착할 수 있다. 하나가 비어도 나머지는 그려야 한다. */
+const bkWait=(ids,sheet)=>{
+  ids.forEach(id=>{const e=document.getElementById(id); if(e) e.innerHTML='';});
+  return `<div class="cmt"><div class="dot" style="background:#cbd5e1"></div><div>`+
+    `<b>${sheet}</b> 시트가 아직 없습니다. <code>sql/Q8_basket.sql</code> 결과를 채우면 켜집니다.</div></div>`;
+};
+
+function renderBkMx(chs){
+  const ok=new Set(chs);
+  const rows=(C.Q8_basket_mx||[]).filter(r=>bkIn(r)&&ok.has(r.bch)&&ok.has(r.och));
+  if(!rows.length){
+    document.getElementById('bkmx-foot').innerHTML=bkWait(['t-bkmx'],'Q8_basket_mx');
+    return;
+  }
+  const agg={},tot={};
+  rows.forEach(r=>{ (agg[r.bch]=agg[r.bch]||{})[r.och]=(agg[r.bch][r.och]||0)+r.orders;
+                    tot[r.bch]=(tot[r.bch]||0)+r.orders; });
+  const bchs=bkOrd(Object.keys(agg)), ochs=bkOrd([...new Set(rows.map(r=>r.och))]);
+  const keep=c=>(tot[c]&&agg[c][c])?agg[c][c]/tot[c]:0;
+
+  document.getElementById('t-bkmx').innerHTML=
+    '<thead><tr><th>담기 \\ 구매</th>'+ochs.map(c=>`<th>${esc(c)}</th>`).join('')+
+    '<th>유지율</th></tr></thead><tbody>'+
+    bchs.map(b=>`<tr><td>${esc(b)}</td>`+ochs.map(o=>{
+      const v=tot[b]?(agg[b][o]||0)/tot[b]:0;
+      const bg=v?`background:rgba(30,64,175,${(v*0.85).toFixed(3)});color:${v>0.5?'#fff':'inherit'}`:'';
+      return `<td style="${bg}">${v>=0.005?pct(v,0):''}</td>`;
+    }).join('')+`<td style="font-weight:800">${pct(keep(b),0)}</td></tr>`).join('')+'</tbody>';
+
+  // 라스트클릭에서 새는 폭이 큰 채널만 뽑는다 — coh-comment 와 같은 방식.
+  // Organic 자기 자신은 이탈이 아니라 유지이므로 제외한다.
+  const leak=bchs.filter(b=>b!=='Organic'&&tot[b]>=1000&&(agg[b]['Organic']||0)/tot[b]>=0.35)
+    .map(b=>({b,v:(agg[b]['Organic']||0)/tot[b],k:keep(b)}))
+    .sort((x,y)=>y.v-x.v);
+  document.getElementById('bkmx-foot').innerHTML=leak.length
+    ? leak.map(x=>`<div class="cmt"><div class="dot" style="background:${CH_COLOR[x.b]||'#cbd5e1'}"></div><div>`+
+        `<b>${esc(x.b)}</b>로 담은 건의 <b>${pct(x.v,0)}</b>가 Organic 주문으로 집계됩니다. `+
+        `라스트클릭 리포트에 잡히는 ${esc(x.b)} 성과는 실제의 <b>${pct(x.k,0)}</b> 수준입니다.`+
+        `</div></div>`).join('')
+    : '<div style="font-size:11.5px;color:var(--t2)">Organic 이탈이 35%를 넘는 채널이 없습니다.</div>';
+}
+
+function renderBkLat(chs){
+  if(!(C.Q8_basket_lat||[]).some(bkIn)){
+    if(charts['c-bklat']){charts['c-bklat'].destroy();delete charts['c-bklat'];}
+    document.getElementById('bk-lat-ch').innerHTML='';
+    document.getElementById('bklat-foot').innerHTML=bkWait([],'Q8_basket_lat');
+    return;
+  }
+  const sel=document.getElementById('bk-lat-ch');
+  if(!sel.dataset.wired){
+    sel.onchange=()=>renderBkLat(bkOrd(Object.keys(bkAggCh())));
+    sel.dataset.wired='1';
+  }
+  const prev=sel.value;
+  sel.innerHTML='<option value="__all__">전체 채널</option>'+
+    chs.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  sel.value=(prev&&[...sel.options].some(o=>o.value===prev))?prev:'__all__';
+
+  const B=C.basket_buckets||[];
+  const pick=sel.value;
+  const series=(pick==='__all__'?['Organic','SA','PCS','CRM','DA'].filter(c=>chs.includes(c)):[pick]);
+  const cum=ch=>{
+    const m={};
+    (C.Q8_basket_lat||[]).filter(r=>bkIn(r)&&r.ch===ch).forEach(r=>m[r.bucket]=(m[r.bucket]||0)+r.cnt);
+    const t=Object.values(m).reduce((a,b)=>a+b,0);
+    if(!t) return null;
+    let s=0; return B.map(b=>{s+=(m[b]||0); return s/t*100;});
+  };
+  const ds=series.map(c=>({label:c,data:cum(c),borderColor:CH_COLOR[c]||'#94a3b8',
+    backgroundColor:CH_COLOR[c]||'#94a3b8',borderWidth:2.2,pointRadius:3,tension:.25})).filter(d=>d.data);
+
+  mk('c-bklat',{type:'line',
+    data:{labels:B.map(b=>b.replace(/^\d\.\s*/,'')),datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:ds.length>1,position:'top',labels:{boxWidth:10,font:{size:11}}},
+        tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y.toFixed(1)}%`}}},
+      scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%',font:{size:10.5}}},
+              x:{ticks:{font:{size:10.5}}}}}});
+
+  // 24시간 도달률을 읽어 발송 권장 구간을 만든다
+  const i24=B.findIndex(b=>b.includes('6~24시간'));
+  const f=ds.map(d=>({c:d.label,v:d.data[i24]})).filter(x=>x.v!=null).sort((a,b)=>a.v-b.v);
+  document.getElementById('bklat-foot').innerHTML=f.length
+    ? `<div class="cmt"><div class="dot" style="background:${CH_COLOR[f[0].c]||'#cbd5e1'}"></div><div>`+
+      `24시간 내 전환 도달률이 가장 낮은 채널은 <b>${esc(f[0].c)}</b>(${f[0].v.toFixed(1)}%)입니다. `+
+      `가장 오래 망설이는 세그먼트라 CRM 개입 여지가 가장 큽니다.<br>`+
+      `대부분 30분 안에 끝나므로 즉시 발송은 낭비입니다 — <b>담기 후 6~24시간 구간</b> 발송이 효율적입니다.`+
+      `</div></div>`
+    : '';
+}
+
 function renderSpine(m){
   const sess=m.sessions;
   const all=chCurve('__all__');
   const perMo=m.single?'':' (월평균)';
+  /* 담기 = 구매 의도. 가입은 구매의 전제가 아니라 옆에서 일어나는 병렬 이벤트라,
+     화살표 라벨에 각자의 분모를 그대로 적는다(세션→담기 / 세션→가입).
+     담기→구매는 가입 경로와 무관하므로 화살표가 아니라 담기 카드 안에 둔다. */
+  const bk=Object.values(bkAggCh()).reduce((a,t)=>({b:a.b+t.baskets,o:a.o+t.orders}),{b:0,o:0});
+  const bkRate=bk.b?bk.o/bk.b:null;
   const st=[
     {t:'유입',v:sess?nf(sess):'—',u:'세션',d:m.single?'전 채널 합계':`${m.n}개월 합계`},
+    {t:'담기',v:bk.b?nf(bk.b):'?',u:bk.b?'건':'',
+     d:bk.b?`담기→구매 ${pct(bkRate)}`:'Q8 데이터 필요',gap:!bk.b},
     {t:'가입',v:nf(m.join),u:'명',d:m.single?'신규 회원가입':`${m.n}개월 합계`},
     {t:'첫구매',v:nf(m.newB),u:'명',d:m.single?'생애첫구매':`${m.n}개월 합계`},
     {t:'재구매',v:nf(m.repB),u:'명',d:`전체 구매자의 ${pct(m.repeatRate)}${perMo}`},
@@ -942,6 +1175,7 @@ function renderSpine(m){
     {t:'이탈',v:'?',u:'',d:'Q4 데이터 필요',gap:true}
   ];
   const cv=[
+    sess&&bk.b?{r:pct(bk.b/sess,1),l:'세션→담기'}:null,
     sess&&m.join?{r:pct(m.join/sess,2),l:'세션→가입'}:null,
     m.join?{r:pct(m.newB/m.join),l:'가입→첫구매'}:null,
     all&&all.ret1!=null?{r:pct(all.ret1),l:'1개월차 재구매'}:null,
