@@ -988,12 +988,34 @@ const bkPartial=()=>{const y=(C.Q8_basket_ch||[]).map(r=>r.ym); return y.length?
 function bkAggCh(){
   const o={};
   (C.Q8_basket_ch||[]).filter(bkIn).forEach(r=>{
-    const t=o[r.ch]||(o[r.ch]={baskets:0,users:0,orders:0});
-    t.baskets+=r.baskets; t.users+=r.users; t.orders+=r.orders;
+    const t=o[r.ch]||(o[r.ch]={baskets:0,users:0,orders:0,months:0});
+    t.baskets+=r.baskets; t.orders+=r.orders; t.users+=r.users; t.months++;
   });
   // 전환율은 여기서 합산 후 계산한다. 월별 비율을 평균내면 볼륨 가중이 무너진다.
-  Object.values(o).forEach(t=>t.rate=t.baskets?t.orders/t.baskets:null);
+  // users 는 월별 유니크라 더하면 같은 고객이 개월수만큼 겹친다(전 채널 합이 회원
+  // 총수를 넘겼다). 규모를 보여주는 용도이므로 월평균으로 환산한다.
+  Object.values(o).forEach(t=>{
+    t.rate=t.baskets?t.orders/t.baskets:null;
+    t.userAvg=t.months?t.users/t.months:null;
+  });
   return o;
+}
+
+/* Q8 이 실제로 덮는 월. 대시보드 기간과 다를 수 있어 라벨을 여기서 만든다. */
+function bkMonths(){
+  return [...new Set((C.Q8_basket_ch||[]).filter(bkIn).map(r=>r.ym))].sort();
+}
+
+/* 담기 채널 -> 같은 채널 주문 비율(대각선). 라스트클릭이 그 채널에 얼마나
+   남겨주는지를 뜻하므로, CAC 를 실제 기여 기준으로 되돌리는 계수가 된다.
+   기간 필터를 걸지 않는다 - 광고비 보유월과 Q8 보유월이 겹치지 않아
+   교집합을 잡으면 표본이 0 이 된다. */
+function bkKeep(ch){
+  const rows=(C.Q8_basket_mx||[]).filter(r=>r.bch===ch);
+  if(!rows.length) return null;
+  const tot=rows.reduce((a,r)=>a+r.orders,0);
+  const self=rows.filter(r=>r.och===ch).reduce((a,r)=>a+r.orders,0);
+  return (tot&&self)?self/tot:null;
 }
 
 function renderBasket(){
@@ -1034,27 +1056,37 @@ function renderBkCh(agg,chs,tiny){
      d:'담기 5천건 이상 채널 중'},
     {c:'warn',k:`최저 · ${worst||'—'}`, v:worst?pct(agg[worst].rate):'—', u:'',
      d:best&&worst?`최고 대비 ${(agg[best].rate/agg[worst].rate).toFixed(1)}배 격차`:''},
-    {c:'',    k:'담기 볼륨', v:nf(tot.b), u:'건', d:oneMonth()?`${PFROM} 기준`:`${PFROM}~${PTO} 누계`}
+    {c:'',    k:'담기 볼륨', v:nf(tot.b), u:'건', d:(()=>{const m=bkMonths();
+       return !m.length?'—':(m.length===1?`${m[0]} 기준`:`${m[0]}~${m[m.length-1]} 누계 (${m.length}개월)`);})()}
   ].map(x=>`<div class="kpi ${x.c}"><div class="k">${x.k}</div><div class="v">${x.v}`+
     `${(x.u&&x.v!=='—')?`<small>${x.u}</small>`:''}</div><div class="d">${x.d}</div></div>`).join('');
 
   const mx=Math.max(...chs.map(c=>agg[c].rate||0))||1;
   document.getElementById('t-bkch').innerHTML=
-    '<thead><tr><th>채널</th><th>담기</th><th>담은 고객</th><th>구매전환</th>'+
-    '<th>전환율</th><th style="width:34%">　</th></tr></thead><tbody>'+
+    '<thead><tr><th>채널</th><th>담기</th><th>구매전환</th><th>전환율</th>'+
+    '<th>월평균 담은 고객</th><th style="width:30%">　</th></tr></thead><tbody>'+
     chs.sort((a,b)=>agg[b].rate-agg[a].rate).map(c=>{
       const t=agg[c], w=t.rate?(t.rate/mx*100):0;
       const col=CH_COLOR[c]||'#cbd5e1';
       return `<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;`+
         `background:${col};margin-right:6px"></span>${esc(c)}</td>`+
-        `<td>${nf(t.baskets)}</td><td>${nf(t.users)}</td><td>${nf(t.orders)}</td>`+
+        `<td>${nf(t.baskets)}</td><td>${nf(t.orders)}</td>`+
         `<td style="font-weight:800">${pct(t.rate)}</td>`+
+        `<td>${t.userAvg?nf(Math.round(t.userAvg)):'—'}</td>`+
         `<td><div style="background:${col};height:9px;border-radius:3px;width:${w.toFixed(1)}%"></div></td></tr>`;
     }).join('')+'</tbody>';
 
   const p=bkPartial();
+  const bm=bkMonths();
+  // 선택 기간보다 Q8 이 좁으면 그 사실을 적는다. 안 적으면 KPI 를 선택 기간
+  // 전체의 값으로 읽게 된다.
+  const narrow=bm.length&&(bm[0]>PFROM||bm[bm.length-1]<PTO);
   document.getElementById('bkch-foot').innerHTML=
     `※ 전환율은 기간 전체를 합산해 다시 계산합니다(월별 비율의 평균이 아님).`+
+    (narrow?`<br>※ 장바구니 데이터는 <b>${esc(bm[0])}~${esc(bm[bm.length-1])}</b>만 있어 `+
+            `선택 기간(${esc(PFROM)}~${esc(PTO)})과 다릅니다. 위 숫자는 그 구간만의 값입니다.`:'')+
+    `<br>※ <b>월평균 담은 고객</b>은 월별 유니크라 합산하지 않고 평균을 냅니다 `+
+    `(합산하면 같은 고객이 개월수만큼 겹칩니다).`+
     (p&&p>=PFROM&&p<=PTO
       ? `<br>※ <b>${esc(p)}</b>은 담기 후 31일이 지나지 않은 건이 빠져 <b>담기 볼륨만 부분집계</b>입니다. 전환율은 유효합니다.`
       : '')+
@@ -1146,11 +1178,42 @@ function renderBkLat(chs){
   // 24시간 도달률을 읽어 발송 권장 구간을 만든다
   const i24=B.findIndex(b=>b.includes('6~24시간'));
   const f=ds.map(d=>({c:d.label,v:d.data[i24]})).filter(x=>x.v!=null).sort((a,b)=>a.v-b.v);
-  document.getElementById('bklat-foot').innerHTML=f.length
-    ? `<div class="cmt"><div class="dot" style="background:${CH_COLOR[f[0].c]||'#cbd5e1'}"></div><div>`+
-      `24시간 내 전환 도달률이 가장 낮은 채널은 <b>${esc(f[0].c)}</b>(${f[0].v.toFixed(1)}%)입니다. `+
-      `가장 오래 망설이는 세그먼트라 CRM 개입 여지가 가장 큽니다.<br>`+
-      `대부분 30분 안에 끝나므로 즉시 발송은 낭비입니다 — <b>담기 후 6~24시간 구간</b> 발송이 효율적입니다.`+
+
+  /* 발송 시점 근거는 누적 비중이 아니라 시간당 전환 속도다.
+     다만 '가장 많이 꺾인 곳'을 고르면 안 된다 - 30분 이내에 과반이 몰려 있어
+     첫 경계가 늘 이기고, 결론이 '즉시 발송'으로 뒤집힌다.
+     개입 시점은 자연 전환이 사실상 멈춘 곳(피크 대비 5% 미만)이다. */
+  const HRS={'1':0.5,'2':0.5,'3':5,'4':18,'5':48,'6':96,'7':168,'8':408};
+  const allCum=(()=>{
+    const m={};
+    (C.Q8_basket_lat||[]).filter(bkIn).forEach(r=>m[r.bucket]=(m[r.bucket]||0)+r.cnt);
+    const t=Object.values(m).reduce((x,y)=>x+y,0);
+    if(!t) return null;
+    let s2=0; return B.map(bb=>{s2+=(m[bb]||0); return s2/t*100;});
+  })();
+  let pace='';
+  if(allCum){
+    const nm=bb=>esc(bb.replace(/^\d\.\s*/,''));
+    const share=B.map((bb,i)=>allCum[i]-(i?allCum[i-1]:0));
+    const rate=B.map((bb,i)=>{const h=HRS[bb.slice(0,1)]; return h?share[i]/h:null;});
+    const peak=Math.max(...rate.filter(v=>v!=null));
+    const at=rate.findIndex((v,i)=>i>0&&v!=null&&v<peak*0.05);
+    const seq=[1,2,3].filter(i=>rate[i]!=null)
+      .map(i=>`${nm(B[i])} <b>${rate[i].toFixed(2)}%</b>`).join(' → ');
+    pace=`담기 후 <b>${nm(B[0])}</b>에 <b>${share[0].toFixed(1)}%</b>가 스스로 전환됩니다. `+
+         `이후 시간당 전환 속도는 ${seq} 로 떨어집니다.<br>`+
+         (at>0
+           ? `<b>${nm(B[at])}</b>부터는 피크의 5% 아래(시간당 ${rate[at].toFixed(2)}%)로, `+
+             `자연 전환이 사실상 멈춥니다. 이 시점에 아직 <b>${(100-allCum[at-1]).toFixed(1)}%</b>가 `+
+             `남아 있어 <b>${nm(B[at])} 구간</b>이 잠식과 도달의 균형점입니다.`
+           : `즉시 발송은 과반을 어차피 살 사람에게 쓰는 셈입니다.`)+
+         ` <span style="color:var(--t3)">(24시간 누적 ${allCum[3].toFixed(1)}%)</span>`;
+  }
+  document.getElementById('bklat-foot').innerHTML=(f.length||pace)
+    ? `<div class="cmt"><div class="dot" style="background:${f.length?(CH_COLOR[f[0].c]||'#cbd5e1'):'#94a3b8'}"></div><div>`+
+      (f.length?`24시간 내 전환 도달률이 가장 낮은 채널은 <b>${esc(f[0].c)}</b>(${f[0].v.toFixed(1)}%)입니다. `+
+                `가장 오래 망설이는 세그먼트라 CRM 개입 여지가 가장 큽니다.`:'')+
+      (pace?`<br>${pace}`:'')+
       `</div></div>`
     : '';
 }
@@ -1302,36 +1365,52 @@ function renderCAC(){
   const chCost=out.DA.cost+out.SA.cost;
   tb.innerHTML=
     '<thead><tr><th>채널</th><th>광고비</th><th>신규</th><th>CAC</th>'+
-    '<th>12M LTV</th><th>LTV÷CAC</th><th>비용비중</th></tr></thead><tbody>'+
+    '<th>보정 CAC</th><th>12M LTV</th><th>LTV÷CAC</th><th>비용비중</th></tr></thead><tbody>'+
     rows.map(([ch,o])=>{
-      const cc=cac(o), lv=ltv(ch), x=(cc&&lv)?lv/cc:null;
+      const cc=cac(o), lv=ltv(ch);
+      // 라스트클릭이 그 채널에 남겨주는 비율(k)만큼 신규가 과소집계된다.
+      // 보정 CAC = CAC x k. LTV 배수도 보정본 기준으로 본다.
+      const k=(typeof bkKeep==='function')?bkKeep(ch):null;
+      const cc2=(cc&&k)?cc*k:null;
+      const base=cc2||cc;
+      const x=(base&&lv)?lv/base:null;
       const xc=x==null?'#94a3b8':(x>=3?'#065f46':(x>=1?'#92400e':'#991b1b'));
       return `<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;`+
         `background:${CH_COLOR[ch]||'#cbd5e1'};margin-right:6px"></span>${ch}</td>`+
         `<td>${eok(o.cost)}억</td><td>${nf(o.first)}</td><td>${won(cc)}</td>`+
+        `<td>${cc2?`<b>${won(cc2)}</b><span style="color:var(--t3);font-size:10.5px"> ×${k.toFixed(2)}</span>`:'—'}</td>`+
         `<td>${lv?nf(lv):'—'}</td>`+
         `<td style="color:${xc};font-weight:800">${x?x.toFixed(2)+'x':'—'}</td>`+
         `<td>${pct(o.cost/chCost,0)}</td></tr>`;
     }).join('')+
     `<tr class="tot"><td>전체(blended)</td><td>${eok(cost)}억</td><td>${nf(first)}</td>`+
-    `<td>${won(blended)}</td><td>—</td><td>—</td><td>100%</td></tr></tbody>`;
+    `<td>${won(blended)}</td><td>—</td><td>—</td><td>—</td><td>100%</td></tr></tbody>`;
 
   // 해석 — 숫자만 두면 "DA를 줄여라"로 잘못 읽힌다. 한계를 같이 적는다.
   const line=(c,t)=>`<div class="cmt"><div class="dot" style="background:${c}"></div><div>${t}</div></div>`;
   const daC=cac(out.DA), saC=cac(out.SA), o=[];
+  const kDA=(typeof bkKeep==='function')?bkKeep('DA'):null;
   if(daC&&saC) o.push(line(CH_COLOR.DA,
     `<b>DA CAC ${won(daC)}원</b>은 SA(${won(saC)}원)의 <b>${(daC/saC).toFixed(1)}배</b>지만 `+
     `<b>DA가 나쁘다는 뜻이 아닙니다.</b> 첫구매 채널이 last-click 기준이라, DA가 만든 인지·유입이 `+
     `Organic·SA 전환으로 넘어가 DA에는 비용만 남고 분모에는 소수만 잡힙니다. `+
     `DA 비용비중이 <b>${pct(out.DA.cost/chCost,0)}</b>인데 last-click 신규는 `+
-    `<b>${pct(out.DA.first/(out.DA.first+out.SA.first),0)}</b>뿐인 게 그 증거입니다. `+
-    `<b>DA는 CAC 단독으로 판단하지 마십시오</b> — 증분 실험(중단 테스트)이라야 진짜 기여가 나옵니다.`));
+    `<b>${pct(out.DA.first/(out.DA.first+out.SA.first),0)}</b>뿐인 게 그 증거입니다.`+
+    (kDA?`<br><b>그 새는 폭이 이제 측정됩니다.</b> 장바구니 데이터에서 DA로 담은 건 중 `+
+         `같은 채널 주문으로 남는 비율이 <b>${pct(kDA,0)}</b>입니다. 이 비율로 되돌린 `+
+         `<b>보정 CAC는 ${won(daC*kDA)}원</b>입니다(위 표).`
+        :` <b>DA는 CAC 단독으로 판단하지 마십시오.</b>`)));
   o.push(line('#94a3b8',
     `<b>Blended CAC ${won(blended)}원</b>이 지금으로선 가장 믿을 만한 지표입니다. `+
     `광고비 전액을 전체 신규로 나눠 귀속 문제를 우회합니다. `+
     `단 <b>유기 유입도 분모에 들어가</b> 실제 유료 획득단가보다 낮게 나옵니다.`+
     (roas?` 같은 기간 신규 ROAS는 <b>${roas.toFixed(1)}배</b>입니다.`:'')));
   const gapMs=inRange().filter(m=>!(C.COST||{})[m]);
+  const bkm=[...new Set((C.Q8_basket_mx||[]).map(r=>r.ym))].sort();
+  if(bkm.length) o.push(line('#cbd5e1',
+    `<b>보정 CAC</b>는 담기 채널 대비 같은 채널 주문 비율(3 · Intent &amp; Conversion 의 대각선)을 곱한 값입니다. `+
+    `그 비율은 <b>${esc(bkm[0])}~${esc(bkm[bkm.length-1])}</b> 장바구니 데이터로 잰 것이라 `+
+    `<b>광고비 기간과 겹치지 않습니다</b> — 귀속 왜곡의 크기를 가늠하는 추정치로만 쓰십시오.`));
   o.push(line('#cbd5e1',
     `광고비 보유 <b>${ms[0]} ~ ${ms[ms.length-1]}</b> (${ms.length}개월)`+
     (msCh.length<ms.length?` · 채널별 CAC는 귀속이 온전한 <b>${CH_FROM} 이후 ${msCh.length}개월</b>만 사용`:'')+
