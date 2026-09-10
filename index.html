@@ -339,6 +339,26 @@ canvas{max-width:100%}
         <div style="height:270px"><canvas id="c-bklat"></canvas></div>
         <div id="bklat-foot" style="margin-top:11px"></div>
       </div>
+
+      <div class="card" style="margin-top:13px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+          <div>
+            <h3 style="margin-bottom:3px">채널ID별 소요시간 추적 <span id="cid-badge"></span></h3>
+            <div class="h-sub" style="margin:0">개별 소재·타겟 단위 — 리마인드 붙인 뒤 실제로 빨라졌는지 본다</div>
+          </div>
+          <select class="chsel" id="cid-sel"></select>
+        </div>
+        <div style="height:250px"><canvas id="c-cidlat"></canvas></div>
+        <div id="cidlat-foot" style="margin-top:11px"></div>
+      </div>
+
+      <div class="card" style="margin-top:13px">
+        <h3>미전환 장바구니 <span id="unc-badge"></span></h3>
+        <div class="h-sub">담기의 대부분은 안 팔리고 31일 뒤 사라진다 — 그 덩어리를 누구에게 어떻게 쓸지</div>
+        <div class="grid g4" id="unc-kpis" style="margin-bottom:12px"></div>
+        <div class="scroll"><table id="t-unc"></table></div>
+        <div id="unc-foot" style="margin-top:11px"></div>
+      </div>
     </div>
 
     <!-- 4) Cohort & LTV -->
@@ -1084,6 +1104,8 @@ function renderBasket(){
   renderBkCh(agg,chs,tiny);
   renderBkMx(chs);
   renderBkLat(chs);
+  renderCidLat();
+  renderUnconv();
 }
 
 function renderBkCh(agg,chs,tiny){
@@ -1185,6 +1207,167 @@ function renderBkMx(chs){
         `라스트클릭 리포트에 잡히는 ${esc(x.b)} 성과는 실제의 <b>${pct(x.k,0)}</b> 수준입니다.`+
         `</div></div>`).join('')
     : '<div style="font-size:11.5px;color:var(--t2)">Organic 이탈이 35%를 넘는 채널이 없습니다.</div>';
+}
+
+/* ── 채널ID별 소요시간 추적 ───────────────────────────────────────
+   9채널 그룹으로는 개별 소재/타겟이 안 보인다. 리마인드를 붙인 뒤
+   '24시간 도달률'과 '전환율'이 같이 움직였는지를 월별로 따라간다.
+   둘을 같이 봐야 한다 — 도달률만 빨라지고 전환율이 그대로면 개선이 아니라
+   어차피 살 사람을 앞당긴 잠식이다. */
+function cidAgg(){
+  const rows=(C.Q8_cid_lat||[]).filter(bkIn);
+  if(!rows.length) return null;
+  const o={};
+  for(const r of rows){
+    const t=o[r.cid]||(o[r.cid]={ms:{},total:0});
+    const m=t.ms[r.ym]||(t.ms[r.ym]={baskets:r.baskets,conv:0,within24:0});
+    m.conv+=r.cnt;
+    // 버킷 앞자리가 1~4 면 24시간 이내다 (1.30분 2.1시간 3.6시간 4.24시간)
+    if(+String(r.bucket).slice(0,1)<=4) m.within24+=r.cnt;
+    t.total+=r.cnt;
+  }
+  return o;
+}
+
+function renderCidLat(){
+  const badge=document.getElementById('cid-badge');
+  const sel=document.getElementById('cid-sel');
+  const foot=document.getElementById('cidlat-foot');
+  const agg=cidAgg();
+  if(!agg){
+    badge.innerHTML='<span class="badge b-soon">데이터 대기</span>';
+    if(charts['c-cidlat']){charts['c-cidlat'].destroy();delete charts['c-cidlat'];}
+    sel.innerHTML='';
+    foot.innerHTML='<div class="cmt"><div class="dot" style="background:#cbd5e1"></div><div>'+
+      '<code>sql/master_sheets.sql</code> 의 <b>쿼리 ④</b> 를 돌려 시트 '+
+      '<b>7_raw_채널ID시간</b> 에 붙이면 켜집니다.'+
+      '<pre style="margin-top:8px">ym  channel_id  baskets  bucket  cnt</pre></div></div>';
+    return;
+  }
+  badge.innerHTML='<span class="badge b-real">실측</span>';
+  const cids=Object.keys(agg).sort((a,b)=>agg[b].total-agg[a].total);
+  if(!sel.dataset.wired){ sel.onchange=()=>renderCidLat(); sel.dataset.wired='1'; }
+  const prev=sel.value;
+  sel.innerHTML=cids.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  sel.value=(prev&&cids.includes(prev))?prev:cids[0];
+
+  const t=agg[sel.value];
+  const ms=Object.keys(t.ms).sort();
+  const r24=ms.map(m=>{const x=t.ms[m]; return x.conv?x.within24/x.conv*100:null;});
+  const cvr=ms.map(m=>{const x=t.ms[m]; return x.baskets?x.conv/x.baskets*100:null;});
+
+  mk('c-cidlat',{data:{labels:ms.map(m=>m.slice(2)),datasets:[
+    {type:'line',label:'24시간 내 도달률',data:r24,borderColor:'#6366f1',
+     backgroundColor:'#6366f1',yAxisID:'y',tension:.25,pointRadius:3,borderWidth:2.2},
+    {type:'line',label:'전환율',data:cvr,borderColor:'#f59e0b',
+     backgroundColor:'#f59e0b',yAxisID:'y1',tension:.25,pointRadius:3,borderWidth:2.2,borderDash:[4,3]}]},
+    options:{maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}},
+        tooltip:{callbacks:{label:c=>` ${c.dataset.label} ${c.raw==null?'—':c.raw.toFixed(1)}%`}}},
+      scales:{x:GRID,
+        y:{...GRID,position:'left',ticks:{...GRID.ticks,callback:v=>v+'%'}},
+        y1:{...GRID,position:'right',grid:{drawOnChartArea:false},
+            ticks:{...GRID.ticks,callback:v=>v+'%'}}}}});
+
+  const line=(c,x)=>`<div class="cmt"><div class="dot" style="background:${c}"></div><div>${x}</div></div>`;
+  const o=[];
+  if(ms.length>=2){
+    const i=ms.length-1, a=r24[i-1], b=r24[i], ca=cvr[i-1], cb=cvr[i];
+    if(a!=null&&b!=null&&ca!=null&&cb!=null){
+      const d24=b-a, dcv=cb-ca;
+      o.push(line(d24>=0?'#22c55e':'#ef4444',
+        `<b>${esc(ms[i])}</b> 24시간 도달률 <b>${b.toFixed(1)}%</b> (전월 ${a.toFixed(1)}% · ${d24>=0?'+':'▲'}${Math.abs(d24).toFixed(1)}%p) · `+
+        `전환율 <b>${cb.toFixed(1)}%</b> (${dcv>=0?'+':'▲'}${Math.abs(dcv).toFixed(1)}%p)<br>`+
+        (d24>0.5&&dcv<=0.1
+          ? `<b>도달률만 빨라지고 전환율은 제자리입니다 — 잠식 신호입니다.</b> 어차피 살 사람을 앞당겼을 뿐일 수 있습니다.`
+          : d24>0.5&&dcv>0.1
+            ? `<b>둘 다 올랐습니다.</b> 없던 전환이 생긴 것이라 개입이 실제로 먹혔다고 볼 수 있습니다.`
+            : `아직 뚜렷한 변화가 없습니다.`)));
+    }
+  }
+  o.push(line('#cbd5e1',
+    `<b>${esc(sel.value)}</b> · 누적 전환 <b>${nf(t.total)}</b>건 · 상위 ${cids.length}개 채널ID만 수집합니다. `+
+    `<b>24시간 도달률</b>은 전환 건 중 24시간 안에 끝난 비율, <b>전환율</b>은 담기 대비 전환입니다.`));
+  foot.innerHTML=o.join('');
+}
+
+
+/* ── 미전환 장바구니 ───────────────────────────────────────────────
+   담기의 대부분은 안 팔리고 31일 뒤 사라진다. 여기가 실제 물량이다.
+   '그 상품만 안 산 사람'과 '아무것도 안 산 사람'을 갈라야 액션이 갈린다 —
+   전자에 리마인드를 보내면 이미 다른 걸 산 사람에게 보내는 셈이다. */
+function renderUnconv(){
+  const badge=document.getElementById('unc-badge');
+  const kp=document.getElementById('unc-kpis'), tb=document.getElementById('t-unc');
+  const foot=document.getElementById('unc-foot');
+  const rows=(C.Q8_unconv||[]).filter(bkIn);
+  if(!rows.length){
+    badge.innerHTML='<span class="badge b-soon">데이터 대기</span>';
+    kp.innerHTML=''; tb.innerHTML='';
+    foot.innerHTML='<div class="cmt"><div class="dot" style="background:#cbd5e1"></div><div>'+
+      '<code>sql/master_sheets.sql</code> 의 <b>쿼리 ⑤</b> 를 돌려 시트 '+
+      '<b>8_raw_미전환장바구니</b> 에 붙이면 켜집니다.'+
+      '<pre style="margin-top:8px">ym  channel  tier  outcome  baskets  customers</pre>'+
+      'outcome = 1_전환 / 2_미전환·다른구매 / 3_미전환·무구매</div></div>';
+    return;
+  }
+  badge.innerHTML='<span class="badge b-real">실측</span>';
+  const OUT=['1_전환','2_미전환·다른구매','3_미전환·무구매'];
+  const NAME={'1_전환':'전환','2_미전환·다른구매':'미전환 · 다른구매','3_미전환·무구매':'미전환 · 무구매'};
+  const COL ={'1_전환':'#22c55e','2_미전환·다른구매':'#f59e0b','3_미전환·무구매':'#ef4444'};
+
+  const byOut={}, byCh={};
+  let tot=0;
+  for(const r of rows){
+    byOut[r.outcome]=(byOut[r.outcome]||0)+r.baskets;
+    const c=byCh[r.ch]||(byCh[r.ch]={});
+    c[r.outcome]=(c[r.outcome]||0)+r.baskets;
+    tot+=r.baskets;
+  }
+  const custByOut={};
+  for(const r of rows) custByOut[r.outcome]=(custByOut[r.outcome]||0)+r.customers;
+
+  const pctOf=k=>tot?(byOut[k]||0)/tot:0;
+  kp.innerHTML=[
+    {c:'',    k:'전체 담기', v:nf(tot), u:'건', d:'선택 기간 · 회원 담기만'},
+    {c:'ret', k:'전환', v:pct(pctOf('1_전환')), u:'', d:`${nf(byOut['1_전환']||0)}건`},
+    {c:'warn',k:'미전환 · 다른구매', v:pct(pctOf('2_미전환·다른구매')), u:'',
+     d:'고객은 살아있다 — 상품 쪽 문제'},
+    {c:'gap', k:'미전환 · 무구매', v:pct(pctOf('3_미전환·무구매')), u:'',
+     d:'리마인드 대상 — 여기가 액션 풀'}
+  ].map(x=>`<div class="kpi ${x.c}"><div class="k">${x.k}</div><div class="v">${x.v}`+
+    `${(x.u&&x.v!=='—')?`<small>${x.u}</small>`:''}</div><div class="d">${x.d}</div></div>`).join('');
+
+  const chs=Object.keys(byCh).sort((a,b)=>
+    ((byCh[b]['3_미전환·무구매']||0))-((byCh[a]['3_미전환·무구매']||0)));
+  tb.innerHTML='<thead><tr><th>채널</th>'+OUT.map(k=>`<th>${NAME[k]}</th>`).join('')+
+    '<th>합계</th><th style="width:26%">구성</th></tr></thead><tbody>'+
+    chs.map(c=>{
+      const t=byCh[c], sum=OUT.reduce((a,k)=>a+(t[k]||0),0);
+      const bar=OUT.map(k=>{const w=sum?(t[k]||0)/sum*100:0;
+        return w?`<i style="width:${w.toFixed(2)}%;background:${COL[k]}"></i>`:'';}).join('');
+      return `<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;`+
+        `background:${CH_COLOR[c]||'#cbd5e1'};margin-right:6px"></span>${esc(c)}</td>`+
+        OUT.map(k=>`<td>${nf(t[k]||0)}<span class="sub2">${sum?pct((t[k]||0)/sum,0):''}</span></td>`).join('')+
+        `<td>${nf(sum)}</td><td><div class="mini">${bar}</div></td></tr>`;
+    }).join('')+'</tbody>';
+
+  const line=(c,x)=>`<div class="cmt"><div class="dot" style="background:${c}"></div><div>${x}</div></div>`;
+  const o=[];
+  const pool=byOut['3_미전환·무구매']||0, other=byOut['2_미전환·다른구매']||0;
+  o.push(line('#ef4444',
+    `<b>미전환 · 무구매 ${nf(pool)}건</b>(전체의 ${pct(pctOf('3_미전환·무구매'))}) — `+
+    `담아놓고 31일 동안 아무것도 안 산 고객 <b>${nf(custByOut['3_미전환·무구매']||0)}명</b>입니다. `+
+    `<b>리마인드·리타게팅은 여기에만 쓰십시오.</b>`));
+  o.push(line('#f59e0b',
+    `<b>미전환 · 다른구매 ${nf(other)}건</b>은 그 상품만 안 산 것이고 고객은 살아 있습니다. `+
+    `여기에 리마인드를 보내면 <b>이미 다른 걸 산 사람에게 보내는 셈</b>입니다 — `+
+    `가격·품절·대체구매를 의심할 자리라 상품 쪽 액션입니다.`));
+  const worst=chs[0];
+  if(worst) o.push(line(CH_COLOR[worst]||'#94a3b8',
+    `무구매 물량이 가장 큰 채널은 <b>${esc(worst)}</b>로 `+
+    `<b>${nf(byCh[worst]['3_미전환·무구매']||0)}건</b>입니다.`));
+  foot.innerHTML=o.join('');
 }
 
 function renderBkLat(chs){
