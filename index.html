@@ -218,11 +218,14 @@ canvas{max-width:100%}
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px">
         <div>
           <h3 style="margin-bottom:3px">타겟 우선순위 <span id="prio-badge"></span></h3>
-          <div class="h-sub" style="margin:0">비용을 어디에 먼저 쓸지 — 상위 5개만</div>
+          <div class="h-sub" style="margin:0">비용을 어디에 먼저 쓸지 — 상위 5개만<br>
+            <b>1인당 연매출</b> = 그 칸 고객의 최근 365일 총수주 ÷ 인원 ·
+            <b>위험금액</b> = 그 칸의 최근 365일 총수주 합(이탈 시 잃는 돈).
+            <span style="color:var(--t3)">코호트 LTV(누적 생애가치)와는 다른 값입니다.</span></div>
         </div>
         <div class="toggle" id="prio-sort">
           <button data-s="var" class="on">위험금액</button>
-          <button data-s="per">1인당 가치</button>
+          <button data-s="per">1인당 연매출</button>
           <button data-s="cnt">고객수</button>
         </div>
       </div>
@@ -233,19 +236,14 @@ canvas{max-width:100%}
 
     <div class="card" style="margin-top:13px">
       <h3>구간 × 로그인 깊이 <span id="depth-badge"></span></h3>
-      <div class="h-sub">같은 이탈구간이라도 붙어 있던 정도에 따라 값어치가 갈린다 — 누굴 먼저 건드릴지</div>
+      <div class="h-sub">같은 이탈구간이라도 붙어 있던 정도에 따라 값어치가 갈린다 — 누굴 먼저 건드릴지<br>
+        <b>로그인 횟수는 가입 이후 누적</b>입니다(최근 1년이 아님). 오래된 회원일수록 자연히 큽니다.
+        <span style="color:var(--t3)">1인당 값은 최근 365일 총수주 ÷ 인원.</span></div>
       <div class="scroll"><table class="hm" id="t-depth"></table></div>
       <div id="depth-cmt" style="margin-top:11px"></div>
     </div>
 
-    <div class="card" style="margin-top:13px">
-      <h3>이탈 커브 <span id="curve-badge"></span></h3>
-      <div class="h-sub">경과일별 구매율 — <b>급락 지점이 곧 구간 경계의 근거</b></div>
-      <div style="height:250px"><canvas id="c-curve"></canvas></div>
-      <div id="curve-foot" style="margin-top:11px;font-size:11.5px;color:var(--t2);line-height:1.7"></div>
-    </div>
-
-    <!-- 2) Channel Growth -->
+        <!-- 2) Channel Growth -->
     <div class="sec"><h2>2 · Channel Growth</h2><span class="badge b-real">실측</span>
       <span class="note">채널을 유입부터 재구매까지 한 줄로 — 획득 채널의 진짜 값어치</span></div>
     <div class="card" style="margin-bottom:13px">
@@ -359,6 +357,12 @@ canvas{max-width:100%}
         <h3>미전환 장바구니 <span id="unc-badge"></span></h3>
         <div class="h-sub">담기의 대부분은 안 팔리고 31일 뒤 사라진다 — 그 덩어리를 누구에게 어떻게 쓸지</div>
         <div class="grid g4" id="unc-kpis" style="margin-bottom:12px"></div>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+          <div class="toggle" id="unc-axis">
+            <button data-a="ch" class="on">채널별</button>
+            <button data-a="tier">등급별</button>
+          </div>
+        </div>
         <div class="scroll"><table id="t-unc"></table></div>
         <div id="unc-foot" style="margin-top:11px"></div>
       </div>
@@ -550,7 +554,6 @@ function render(){
   renderChurnMatrix();
   renderPriority();
   renderDepth();
-  renderChurnCurve();
   renderBasket();
   renderCohort();
   renderCohortComment();
@@ -652,7 +655,7 @@ function renderPriority(){
     (i<TOPN?head:rest).push(tr);
   });
   const TH=`<thead><tr><th>#</th><th>등급</th><th style="text-align:left">구간</th><th>고객수</th>`+
-           `<th>1인당 가치</th><th>위험금액</th><th>누적</th></tr></thead>`;
+           `<th>1인당 연매출</th><th>위험금액</th><th>누적</th></tr></thead>`;
   document.getElementById('t-prio').innerHTML=TH+`<tbody>${head.join('')}</tbody>`;
   document.getElementById('prio-rest').innerHTML= rest.length
     ? `<details style="margin-top:8px"><summary style="cursor:pointer;font-size:11.5px;color:var(--t3);font-weight:700">나머지 ${rest.length}개 셀 보기</summary>`+
@@ -726,63 +729,6 @@ function renderDepth(){
     `<b>${esc(gaps[gaps.length-1].b)}</b>는 ${gaps[gaps.length-1].x.toFixed(1)}배입니다. `+
     `<b>이탈구간만으로 타겟을 자르면 안 되고 깊이를 같이 봐야 합니다.</b>`));
   cm.innerHTML=o.join('');
-}
-
-/* ── 이탈 커브 — 구간 경계를 데이터로 정하기 위한 근거 ── */
-function renderChurnCurve(){
-  const d=C.Q4_curve||[];
-  document.getElementById('curve-badge').innerHTML =
-    d.length?'<span class="badge b-real">실측</span>':'<span class="badge b-soon">데이터 대기</span>';
-  const foot=document.getElementById('curve-foot');
-  if(!d.length){
-    if(charts['c-curve']){charts['c-curve'].destroy();delete charts['c-curve'];}
-    foot.innerHTML='※ <code>sql/Q5_churn_matrix.sql</code>의 <b>[4] 구간 탐색</b>을 돌려 '+
-      '<code>raw/Q4_churn_curve.tsv</code>로 넣으면 켜집니다.'+
-      '<pre style="margin-top:8px">day_from  day_to  customers  buy_rate_365d  rev_per_cust  cum_pct</pre>';
-    return;
-  }
-  const rows=[...d].sort((a,b)=>a.day_from-b.day_from);
-  mk('c-curve',{data:{labels:rows.map(r=>'D'+r.day_from),datasets:[
-    {type:'line',label:'구매율(365일)',data:rows.map(r=>r.buy_rate_365d),
-     borderColor:'#ef4444',backgroundColor:'#ef4444',yAxisID:'y',tension:.25,pointRadius:1.5,borderWidth:2},
-    {type:'bar',label:'고객수',data:rows.map(r=>r.customers),
-     backgroundColor:'rgba(148,163,184,.35)',yAxisID:'y1'}]},
-    options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}},
-      tooltip:{callbacks:{title:c=>'경과 '+rows[c[0].dataIndex].day_from+'~'+rows[c[0].dataIndex].day_to+'일'}}},
-      scales:{x:GRID,y:{...GRID,position:'left',ticks:{...GRID.ticks,callback:v=>v+'%'}},
-              y1:{...GRID,position:'right',grid:{drawOnChartArea:false},ticks:{...GRID.ticks,callback:v=>(v/1e4).toFixed(0)+'만'}}}}});
-  // 일 단위는 하루치 표본이라 낙폭이 심하게 튄다. 7일 이동평균으로 눌러야 추세가 보인다.
-  const br={}; rows.forEach(r=>{br[r.day_from]=r.buy_rate_365d;});
-  const nOf={}; rows.forEach(r=>{nOf[r.day_from]=r.customers;});
-  const days=Object.keys(br).map(Number).sort((a,b)=>a-b);
-  const sm={};
-  for(const a of days){
-    const w=[]; for(let x=a-3;x<=a+3;x++) if(br[x]!=null) w.push(br[x]);
-    sm[a]=w.reduce((p,q)=>p+q,0)/w.length;
-  }
-  const drop=days.filter(a=>sm[a-1]!=null).map(a=>({at:a,d:sm[a-1]-sm[a],n:nOf[a]||0}));
-  const rank={}; [...drop].sort((x,y)=>y.d-x.d).forEach((x,i)=>rank[x.at]=i+1);
-  const at=b=>{const h=drop.find(x=>x.at===b);
-    return h?`<b>D${b}</b> ${h.d.toFixed(2)}%p <span style="color:var(--t3)">(${rank[b]}위/${drop.length})</span>`:`<b>D${b}</b> —`;};
-
-  // 현재 경계로 잘랐을 때 각 구간의 가중 구매율 — 경계를 정당화하는 진짜 근거
-  const SEG=[[0,6,'초단기'],[7,27,'단기'],[28,89,'중기'],[90,179,'장기'],[180,9999,'초장기']];
-  const seg=SEG.map(([lo,hi,nm])=>{
-    const rs=rows.filter(r=>r.day_from>=lo&&r.day_from<=hi);
-    const c=rs.reduce((a,r)=>a+r.customers,0);
-    const w=c?rs.reduce((a,r)=>a+r.customers*(r.buy_rate_365d||0),0)/c:0;
-    return {nm,c,w};
-  });
-
-  foot.innerHTML =
-    `※ <b>현재 경계의 낙폭</b> (7일 이동평균) — ${[7,28,90,180].map(at).join(' · ')}<br>`+
-    `※ <b>구간별 구매율</b> — `+
-    seg.map(x=>`${x.nm} <b>${x.w.toFixed(1)}%</b>(${nf(x.c)}명)`).join(' · ')+`<br>`+
-    `<span style="display:block;margin-top:7px;padding:9px 12px;background:#f0f9ff;border-left:3px solid var(--blue);border-radius:6px">`+
-    `<b>결론 — 이탈은 절벽이 아니라 완만한 경사입니다.</b> 1일 단위로 다시 뽑아 봐도 D4~D9 초반 급락 외에 `+
-    `뚜렷한 무릎이 없고, 나머지 낙폭은 전부 1%p 미만입니다. 즉 <b>경계는 데이터가 정해주지 않습니다.</b><br>`+
-    `그래서 현재 7/28/90/180은 바꿀 이유가 없습니다 — 구간별 구매율이 10%p 안팎씩 고르게 떨어지고 `+
-    `인원도 고르게 나뉘어 운영 언어(1주·4주·3개월·6개월)와도 맞습니다.</span>`;
 }
 
 /* ── 등급별 구간이탈 매트릭스 ──────────────────────────────────────
@@ -1137,7 +1083,9 @@ function renderBkCh(agg,chs,tiny){
   document.getElementById('t-bkch').innerHTML=
     '<thead><tr><th>채널</th><th>장바구니 담기</th><th>전환 담기</th><th>전환율</th>'+
     '<th>주문</th><th>월평균 담은 고객수</th><th style="width:26%">　</th></tr></thead><tbody>'+
-    chs.sort((a,b)=>agg[b].rate-agg[a].rate).map(c=>{
+    // 3 섹션 안에서는 채널 순서를 하나로 고정한다(BK_ORDER).
+    // 표마다 정렬이 다르면 같은 채널을 눈으로 따라가지 못한다.
+    chs.map(c=>{
       const t=agg[c], w=t.rate?(t.rate/mx*100):0;
       const col=CH_COLOR[c]||'#cbd5e1';
       return `<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;`+
@@ -1321,11 +1269,15 @@ function renderUnconv(){
   const NAME={'1_전환':'전환','2_미전환·다른구매':'미전환 · 다른구매','3_미전환·무구매':'미전환 · 무구매'};
   const COL ={'1_전환':'#22c55e','2_미전환·다른구매':'#f59e0b','3_미전환·무구매':'#ef4444'};
 
+  // 축을 채널/등급으로 바꿔 본다. 등급이 채널보다 훨씬 강한 변수라
+  // (W SIGNATURE 무구매 7% vs W FRIEND 65%) 둘 다 볼 수 있어야 한다.
+  const axis=(window.uncAxis||'ch');
+  const key=r=>axis==='tier'?r.tier:r.ch;
   const byOut={}, byCh={};
   let tot=0;
   for(const r of rows){
     byOut[r.outcome]=(byOut[r.outcome]||0)+r.baskets;
-    const c=byCh[r.ch]||(byCh[r.ch]={});
+    const c=byCh[key(r)]||(byCh[key(r)]={});
     c[r.outcome]=(c[r.outcome]||0)+r.baskets;
     tot+=r.baskets;
   }
@@ -1343,16 +1295,18 @@ function renderUnconv(){
   ].map(x=>`<div class="kpi ${x.c}"><div class="k">${x.k}</div><div class="v">${x.v}`+
     `${(x.u&&x.v!=='—')?`<small>${x.u}</small>`:''}</div><div class="d">${x.d}</div></div>`).join('');
 
-  const chs=Object.keys(byCh).sort((a,b)=>
-    ((byCh[b]['3_미전환·무구매']||0))-((byCh[a]['3_미전환·무구매']||0)));
-  tb.innerHTML='<thead><tr><th>채널</th>'+OUT.map(k=>`<th>${NAME[k]}</th>`).join('')+
+  const chs=axis==='tier'
+    ? CHURN_TIERS.filter(t=>byCh[t])                  // 등급은 고정 서열
+    : bkOrd(Object.keys(byCh));                       // 채널은 3 섹션 공통 순서
+  tb.innerHTML=`<thead><tr><th>${axis==='tier'?'등급':'채널'}</th>`+OUT.map(k=>`<th>${NAME[k]}</th>`).join('')+
     '<th>합계</th><th style="width:26%">구성</th></tr></thead><tbody>'+
     chs.map(c=>{
       const t=byCh[c], sum=OUT.reduce((a,k)=>a+(t[k]||0),0);
       const bar=OUT.map(k=>{const w=sum?(t[k]||0)/sum*100:0;
         return w?`<i style="width:${w.toFixed(2)}%;background:${COL[k]}"></i>`:'';}).join('');
+      const dot=axis==='tier'?(TIER_COLOR[c]||'#cbd5e1'):(CH_COLOR[c]||'#cbd5e1');
       return `<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;`+
-        `background:${CH_COLOR[c]||'#cbd5e1'};margin-right:6px"></span>${esc(c)}</td>`+
+        `background:${dot};margin-right:6px"></span>${esc(c)}</td>`+
         OUT.map(k=>`<td>${nf(t[k]||0)}<span class="sub2">${sum?pct((t[k]||0)/sum,0):''}</span></td>`).join('')+
         `<td>${nf(sum)}</td><td><div class="mini">${bar}</div></td></tr>`;
     }).join('')+'</tbody>';
@@ -1368,10 +1322,17 @@ function renderUnconv(){
     `<b>미전환 · 다른구매 ${nf(other)}건</b>은 그 상품만 안 산 것이고 고객은 살아 있습니다. `+
     `여기에 리마인드를 보내면 <b>이미 다른 걸 산 사람에게 보내는 셈</b>입니다 — `+
     `가격·품절·대체구매를 의심할 자리라 상품 쪽 액션입니다.`));
-  const worst=chs[0];
-  if(worst) o.push(line(CH_COLOR[worst]||'#94a3b8',
-    `무구매 물량이 가장 큰 채널은 <b>${esc(worst)}</b>로 `+
-    `<b>${nf(byCh[worst]['3_미전환·무구매']||0)}건</b>입니다.`));
+  // 무구매 비중이 가장 높은 칸을 짚는다. 물량 1위와 비중 1위는 다르다 —
+  // 물량은 규모가 큰 채널이 늘 이기므로 비중으로 봐야 체질이 보인다.
+  const rate=c=>{const t=byCh[c],x=OUT.reduce((a,k)=>a+(t[k]||0),0);
+                 return x?(t['3_미전환·무구매']||0)/x:0;};
+  const hi=[...chs].sort((a,b)=>rate(b)-rate(a))[0];
+  const big=[...chs].sort((a,b)=>(byCh[b]['3_미전환·무구매']||0)-(byCh[a]['3_미전환·무구매']||0))[0];
+  const nm=axis==='tier'?'등급':'채널';
+  if(hi) o.push(line((axis==='tier'?TIER_COLOR[hi]:CH_COLOR[hi])||'#94a3b8',
+    `무구매 <b>비중</b>이 가장 높은 ${nm}은 <b>${esc(hi)}</b>로 <b>${pct(rate(hi),0)}</b>입니다`+
+    (big&&big!==hi?` — 물량 1위는 <b>${esc(big)}</b>(${nf(byCh[big]['3_미전환·무구매']||0)}건)로 다릅니다. `+
+      `<b>규모가 큰 쪽이 아니라 체질이 나쁜 쪽을 먼저 봐야 합니다.</b>`:'.')));
   foot.innerHTML=o.join('');
 }
 
@@ -1505,7 +1466,9 @@ function renderCustomer(m){
   document.getElementById('cust-kpis').innerHTML=cards.map(x=>
     `<div class="kpi ${x.c}"><div class="k">${x.k}</div><div class="v">${x.v}${(x.u&&x.v!=='—')?`<small>${x.u}</small>`:''}</div><div class="d">${x.d}</div></div>`).join('');
 
-  const ms=MONTHS.map(metrics).filter(Boolean);
+  // 상단 기간을 따른다. 전 구간을 고정으로 그리면 기간을 좁혀도 안 바뀌어
+  // 위 KPI 와 어긋나 보인다.
+  const ms=inRange().map(metrics).filter(Boolean);
   mk('c-cust',{type:'bar',data:{labels:ms.map(x=>x.ym.slice(2)),datasets:[
     {label:'신규',data:ms.map(x=>x.newB),backgroundColor:'#3b82f6'},
     {label:'기존(재구매)',data:ms.map(x=>x.repB),backgroundColor:'#8b5cf6'}]},
@@ -2002,6 +1965,11 @@ async function loadJSON(urls){
       prioSort=b.dataset.s; renderPriority();
     };
     bindToggle('churn-basis',d=>{churnBasis=d.b;churnSel=null;renderPriority();});
+    document.getElementById('unc-axis').onclick=e=>{
+      const b=e.target.closest('button'); if(!b)return;
+      [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));
+      window.uncAxis=b.dataset.a; renderUnconv();
+    };
     bindToggle('churn-metric',d=>{churnMetric=d.k;});
     bindToggle('churn-mode',  d=>{churnMode  =d.m;});
     document.getElementById('t-churn').onclick=e=>{
