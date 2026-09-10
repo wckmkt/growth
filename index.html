@@ -758,6 +758,16 @@ const CHURN_BANDS=[
   {no:8,name:'초장기', range:'D180+',   hint:'6개월 초과'},
   {no:9,name:'무접점', range:'—',       hint:'로그인/구매 이력 없음'}
 ];
+/* 9번은 basis 마다 뜻이 정반대다.
+   login 기준 = 로그인 로그 자체가 없는 회원. '오래 안 왔다'가 아니라 '기록이 없다'라
+   365일 구매전환율이 82% 로 전 구간 최고다(로그 커버리지 결함). 무접점이라고
+   쓰면 가장 죽은 층으로 읽히는데 실제로는 가장 우량한 층이다.
+   order 기준 = 평생 구매 이력 없음. 이쪽은 말 그대로 죽은 층이다. */
+const BAND9={
+  login:{name:'로그인 기록 없음', hint:'로그인 로그 미기록 — 구매는 활발'},
+  order:{name:'구매 이력 없음',   hint:'평생 구매 0건'}
+};
+const bandDefs=(defs,basis)=>defs.map(b=>b.no===9&&BAND9[basis]?{...b,...BAND9[basis]}:b);
 /* 이미지2의 채널 계획 — 데이터가 아니라 운영 룰이라 정적으로 둔다.
    등급별로 갈리지 않고 구간별로만 갈린다(현 계획 기준). */
 const CHURN_ACTION={
@@ -843,7 +853,7 @@ function renderChurnMatrix(){
      신 6번(중기2)으로 보이는 식으로 조용히 틀린다 — 구 정의로 그린다. */
   const maxB=Math.max(0,...rows.map(r=>+r.band_no||0));
   const stale=rows.length>0&&maxB<=6;
-  const BANDS=stale?CHURN_BANDS_OLD:CHURN_BANDS;
+  const BANDS=bandDefs(stale?CHURN_BANDS_OLD:CHURN_BANDS,snap.basis);
   const EDGE=stale?3:ACTIVE_EDGE;
   document.getElementById('churn-badge').innerHTML =
     !has ? '<span class="badge b-soon">데이터 대기</span>'
@@ -852,15 +862,20 @@ function renderChurnMatrix(){
 
   // 새 컬럼이 아직 없으면 그 지표는 못 그린다 — 버튼을 잠그고 고객수로 되돌린다
   const hasNew=rows.some(r=>r.buyers_365d!=null);
-  if(CHURN_NEEDS_NEW[churnMetric]&&!hasNew) churnMetric='cnt';
+  /* order 기준에서 구매전환율은 정의상 100% 다 — 구간이 '마지막 구매 후 경과'라
+     D180 미만이면 365일 창 안에 산 게 확정이다. 잠가서 오독을 막는다. */
+  const lockCvr=k=>k==='cvr'&&isOrder;
+  if((CHURN_NEEDS_NEW[churnMetric]&&!hasNew)||lockCvr(churnMetric)) churnMetric='cnt';
   const M=CHURN_METRICS[churnMetric]||CHURN_METRICS.cnt;
   const shareOn=(churnMode==='share')&&M.add;
 
   const mt=document.getElementById('churn-metric');
   [...mt.children].forEach(b=>{
-    const lock=!!CHURN_NEEDS_NEW[b.dataset.k]&&!hasNew;
+    const need=!!CHURN_NEEDS_NEW[b.dataset.k]&&!hasNew, cv=lockCvr(b.dataset.k);
+    const lock=need||cv;
     b.disabled=lock; b.style.opacity=lock?'.35':'';
-    b.title=lock?'Q5 재추출 필요 — orders_365d / buyers_365d':'';
+    b.title=need?'Q5 재추출 필요 — orders_365d / buyers_365d'
+          :cv?'마지막 구매 기준에서는 정의상 100% 입니다 — 마지막 로그인 기준으로 보세요':'';
     b.classList.toggle('on',b.dataset.k===churnMetric);
   });
   [...document.getElementById('churn-mode').children].forEach(b=>{
@@ -959,7 +974,7 @@ function renderChurnAction(idx){
   const a=CHURN_ACTION[churnSel.band_no]||{};
   // 선택 셀 라벨도 데이터 스킴을 따라가야 한다 (구 데이터면 구 정의)
   const sn=churnSnapshot(), mx=Math.max(0,...sn.rows.map(r=>+r.band_no||0));
-  const defs=(sn.rows.length&&mx<=6)?CHURN_BANDS_OLD:CHURN_BANDS;
+  const defs=bandDefs((sn.rows.length&&mx<=6)?CHURN_BANDS_OLD:CHURN_BANDS,sn.basis);
   const b=defs.find(x=>x.no===churnSel.band_no)||{};
   const r=idx[churnSel.tier+'|'+churnSel.band_no];
   box.innerHTML=
