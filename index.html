@@ -1597,13 +1597,13 @@ function cacAgg(){
   const msCh=ms.filter(m=>m>=CH_FROM);      // 채널 귀속은 2025-05 부터라야 온전하다
   const mk=()=>({cost:0,first:0,rev:0});
   const out={DA:mk(),SA:mk()};
-  let cost=0, first=0, newRev=0;
+  let cost=0, first=0, newRev=0, ua=0;   // ua 는 DA 안의 신규획득 몫 — DA 와 더하지 않는다
   for(const m of ms){
     const c=COST[m];
     cost   += c.total;
     first  += (D.REAL_MONTHLY[m]||{}).first||0;
     newRev += ((C.Q0_split||{})[m]||{}).first_revenue||0;
-    if(msCh.includes(m)){ out.DA.cost+=c.DA; out.SA.cost+=c.SA; }
+    if(msCh.includes(m)){ out.DA.cost+=c.DA; out.SA.cost+=c.SA; ua+=c.DA_UA||0; }
   }
   // row 에 __total__ 이 채널과 나란히 들어 있다. 훑지 말고 DA/SA 만 집는다.
   const setCh=new Set(msCh);
@@ -1614,7 +1614,7 @@ function cacAgg(){
       out[ch].first+=v.first||0; out[ch].rev+=v.rev||0;
     }
   }
-  return {ms,msCh,out,cost,first,newRev};
+  return {ms,msCh,out,cost,first,newRev,ua};
 }
 
 function renderCAC(){
@@ -1637,7 +1637,7 @@ function renderCAC(){
     return;
   }
   badge.innerHTML='<span class="badge b-real">실측</span>';
-  const {ms,msCh,out,cost,first,newRev}=A;
+  const {ms,msCh,out,cost,first,newRev,ua}=A;
   const cac=o=>o.first?o.cost/o.first:null;
   const blended=first?cost/first:null;
   const roas=cost?newRev/cost:null;
@@ -1648,7 +1648,9 @@ function renderCAC(){
     {c:'',    k:`Blended CAC (${ms.length}개월)`, v:won(blended), u:'원',
      d:'총광고비 ÷ 전체 신규 — 유기 유입까지 분모'},
     {c:'ret', k:'SA CAC', v:won(cac(out.SA)), u:'원', d:'검색은 전환 직결이라 귀속이 비교적 타당'},
-    {c:'warn',k:'DA CAC', v:won(cac(out.DA)), u:'원', d:'last-click 귀속 — 과대평가된다'},
+    {c:'warn',k:'DA CAC', v:won(cac(out.DA)), u:'원',
+     d:ua?`분자에 리타게팅·브랜딩까지 든다 — 신규 획득(UA)분만 쓰면 ${won(cac(out.DA)*ua/out.DA.cost)}원`
+         :'last-click 귀속 — 과대평가된다'},
     {c:'ret', k:'신규 ROAS', v:roas?roas.toFixed(1):'—', u:'배', d:'신규가 만든 총수주 ÷ 총광고비'}
   ].map(x=>
     `<div class="kpi ${x.c}"><div class="k">${x.k}</div><div class="v">${x.v}`+
@@ -1674,7 +1676,14 @@ function renderCAC(){
         `<td>${cc2?`<b>${won(cc2)}</b><span style="color:var(--t3);font-size:10.5px"> ×${k.toFixed(2)}</span>`:'—'}</td>`+
         `<td>${lv?nf(lv):'—'}</td>`+
         `<td style="color:${xc};font-weight:800">${x?x.toFixed(2)+'x':'—'}</td>`+
-        `<td>${pct(o.cost/chCost,0)}</td></tr>`;
+        `<td>${pct(o.cost/chCost,0)}</td></tr>`+
+        /* UA 는 DA 와 나란한 채널이 아니라 DA 안의 신규획득 몫이다.
+           신규는 DA 전체가 만든 것이라 UA 비용만으로 나눈 CAC 는 하한이다. */
+        ((ch==='DA'&&ua)?`<tr style="background:#fafbfc"><td style="padding-left:22px;color:var(--t3)">`+
+          `└ 그중 신규획득(UA)</td><td>${eok(ua)}억</td><td style="color:var(--t3)">${nf(o.first)}</td>`+
+          `<td><b>${won(o.first?ua/o.first:null)}</b><span style="color:var(--t3);font-size:10.5px"> 하한</span></td>`+
+          `<td>—</td><td>—</td><td>—</td>`+
+          `<td style="color:var(--t3)">DA의 ${pct(ua/o.cost,0)}</td></tr>`:'');
     }).join('')+
     `<tr class="tot"><td>전체(blended)</td><td>${eok(cost)}억</td><td>${nf(first)}</td>`+
     `<td>${won(blended)}</td><td>—</td><td>—</td><td>—</td><td>100%</td></tr></tbody>`;
@@ -1693,6 +1702,13 @@ function renderCAC(){
          `같은 채널 주문으로 남는 비율이 <b>${pct(kDA,0)}</b>입니다. 이 비율로 되돌린 `+
          `<b>보정 CAC는 ${won(daC*kDA)}원</b>입니다(위 표).`
         :` <b>DA는 CAC 단독으로 판단하지 마십시오.</b>`)));
+  if(ua&&out.DA.cost&&out.DA.first) o.push(line('#f59e0b',
+    `<b>DA CAC 은 이제 하나의 값이 아니라 구간으로 읽어야 합니다.</b> `+
+    `DA 광고비 ${eok(out.DA.cost)}억 중 신규 획득(UA)에 쓴 건 <b>${eok(ua)}억(${pct(ua/out.DA.cost,0)})</b>이고, `+
+    `나머지는 리타게팅·브랜딩입니다.<br>`+
+    `UA 비용만으로 나누면 <b>${won(ua/out.DA.first)}원</b>, DA 전액으로 나누면 <b>${won(cac(out.DA))}원</b>입니다. `+
+    `<b>실제 값은 이 사이에 있습니다</b> — 리타게팅도 신규 전환에 일부 기여하므로 하한은 너무 낮고, `+
+    `전액 귀속은 기존 고객용 비용까지 신규에 물려 너무 높습니다.`));
   o.push(line('#94a3b8',
     `<b>Blended CAC ${won(blended)}원</b>이 지금으로선 가장 믿을 만한 지표입니다. `+
     `광고비 전액을 전체 신규로 나눠 귀속 문제를 우회합니다. `+
